@@ -1,5 +1,0 @@
-discord
-python-dotenv
-sqlite3
-requests
-asyncio
