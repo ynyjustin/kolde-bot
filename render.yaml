@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: kolde-ai
+    env: python
+    buildCommand: ""
+    startCommand: gunicorn webhook:app --workers 1 --threads 8 -b 0.0.0.0:10000
+    envVars:
+      - key: DISCORD_TOKEN
+        value: YOUR_DISCORD_TOKEN
+      - key: RUNWAY_API_KEY
+        value: YOUR_RUNWAY_API_KEY
+    plan: free
+  - type: background
+    name: kolde-bot
+    env: python
+    buildCommand: ""
+    startCommand: python bot.py
+    envVars:
+      - key: DISCORD_TOKEN
+        value: YOUR_DISCORD_TOKEN
+      - key: RUNWAY_API_KEY
+        value: YOUR_RUNWAY_API_KEY
