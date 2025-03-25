@@ -276,6 +276,15 @@ async def menu(ctx):
     if ctx.channel.id == CHANNEL_ID:
         await setup_menu(ctx.channel)
         await ctx.send("✅ Menu refreshed.")
+        
+        @bot.event
+async def on_application_command_error(ctx, error):
+    print(f"⚠️ Command error: {error}")
+
+@bot.event
+async def on_error(event, *args, **kwargs):
+    print(f"⚠️ General error in {event}: {args}, {kwargs}")
+
 
 # Run bot
 bot.run(TOKEN)
