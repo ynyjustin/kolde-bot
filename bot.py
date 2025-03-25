@@ -206,5 +206,69 @@ async def menu(ctx):
         await setup_menu(ctx.channel)
         await ctx.send("✅ Menu refreshed.")
 
+# --- Access Flow Additions ---
+ACCESS_ROLE_ID = 1227708209356345454  # Your premium role ID
+
+class AccessView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🔓 Get Access", style=discord.ButtonStyle.green, custom_id="get_access")
+    async def get_access(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "💳 Please choose your payment method:",
+            view=PaymentOptions(),
+            ephemeral=True
+        )
+
+class PaymentOptions(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="💳 Pay with Stripe", style=discord.ButtonStyle.blurple, custom_id="pay_stripe")
+    async def stripe(self, interaction: discord.Interaction, button: discord.ui.Button):
+        fake_link = f"https://fake-stripe.com/checkout?user={interaction.user.id}"
+        await interaction.response.send_message(
+            f"🧾 Click below to pay €2.99 and unlock full access:\n{fake_link}",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="🅿️ Pay with PayPal", style=discord.ButtonStyle.gray, custom_id="pay_paypal")
+    async def paypal(self, interaction: discord.Interaction, button: discord.ui.Button):
+        fake_link = f"https://fake-paypal.com/checkout?user={interaction.user.id}"
+        await interaction.response.send_message(
+            f"🧾 Click below to pay €2.99 and unlock full access:\n{fake_link}",
+            ephemeral=True
+        )
+
+# Command to simulate payment and grant access
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def simulate_payment(ctx, member: discord.Member):
+    role = ctx.guild.get_role(ACCESS_ROLE_ID)
+    if not role:
+        await ctx.send("❌ Role not found.")
+        return
+    await member.add_roles(role)
+    credits = get_user_credits(member.id)
+    if credits < 100:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE user_credits SET credits = 100 WHERE user_id = ?", (member.id,))
+        conn.commit()
+        conn.close()
+    await ctx.send(f"✅ {member.mention} has been granted access and 100 credits!")
+
+# Auto-send "Get Access" menu when someone joins
+@bot.event
+async def on_member_join(member):
+    channel = bot.get_channel(CHANNEL_ID)
+    if not channel:
+        return
+    await channel.send(
+        f"👋 Welcome {member.mention}! To get started, unlock access below 👇",
+        view=AccessView()
+    )
+
 # Run bot
 bot.run(TOKEN)
