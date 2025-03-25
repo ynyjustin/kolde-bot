@@ -116,8 +116,18 @@ class MainMenu(discord.ui.View):
             # If no access, show Get Access button
             self.add_item(discord.ui.Button(label="🚀 Get Access", style=discord.ButtonStyle.red, custom_id="get_access"))
 
-async def setup_menu(channel, member):
-    """Post the main menu with updated role check."""
+async def setup_menu():
+    """Ensure the menu is posted in the designated channel."""
+    await bot.wait_until_ready()
+    channel = bot.get_channel(CHANNEL_ID)
+    if not channel:
+        print("❌ ERROR: Channel not found!")
+        return
+    
+    async for message in channel.history(limit=10):
+        if message.author == bot.user and message.embeds:
+            return  # Menu already exists
+
     embed = discord.Embed(
         title="🎬 Welcome to Kolde AI Video Generator",
         description=(
@@ -128,6 +138,9 @@ async def setup_menu(channel, member):
         ),
         color=discord.Color.dark_blue()
     )
+    
+    guild = bot.get_guild(channel.guild.id)
+    member = guild.me
     await channel.send(embed=embed, view=MainMenu(member))
 
 # --- Events ---
@@ -136,6 +149,7 @@ async def on_ready():
     """Initialize bot and ensure menu is pinned."""
     print(f"✅ Logged in as {bot.user}")
     init_db()
+    bot.loop.create_task(setup_menu())  # Fixes menu not appearing
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
@@ -167,7 +181,7 @@ async def on_interaction(interaction: discord.Interaction):
 async def menu(ctx):
     """Manual command to refresh menu."""
     if ctx.channel.id == CHANNEL_ID:
-        await setup_menu(ctx.channel, ctx.author)
+        await setup_menu()
         await ctx.send("✅ Menu refreshed.")
 
 bot.run(TOKEN)
