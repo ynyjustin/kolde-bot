@@ -84,10 +84,17 @@ async def ensure_menu_pinned():
     if not channel:
         print("❌ ERROR: Channel not found!")
         return
+
     async for message in channel.history(limit=10):
         if message.author == bot.user and message.embeds:
-            return
-    await setup_menu(channel)
+            return  # Don't repost if already sent
+
+    embed = discord.Embed(
+        title="🎬 Welcome to Kolde AI",
+        description="Click below to access the video generation tools.",
+        color=discord.Color.orange()
+    )
+    await channel.send(embed=embed, view=GatekeeperView())
 
 async def setup_menu(channel):
     embed = discord.Embed(
@@ -191,6 +198,66 @@ class MainMenu(discord.ui.View):
             "🛍️ Buy more credits here:\nhttps://www.aivideoapi.com/dashboard",
             ephemeral=True
         )
+        ACCESS_ROLE_ID = 1227708209356345454  # Your premium access role
+
+# View shown to everyone on first load
+class GatekeeperView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🚪 Open Menu", style=discord.ButtonStyle.green, custom_id="open_menu")
+    async def open_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
+        role = interaction.guild.get_role(ACCESS_ROLE_ID)
+        if not role:
+            await interaction.response.send_message("❌ Access role not configured.", ephemeral=True)
+            return
+
+        if role in interaction.user.roles:
+            await interaction.response.send_message(
+                "✅ Access granted! Opening main menu...",
+                view=MainMenu(),
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "🔒 You need access to unlock video generation tools.",
+                view=AccessView(),
+                ephemeral=True
+            )
+
+# View for users without access
+class AccessView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🔓 Get Access (€2.99)", style=discord.ButtonStyle.blurple, custom_id="get_access")
+    async def get_access(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "💳 Choose your payment method:",
+            view=PaymentOptionsView(),
+            ephemeral=True
+        )
+
+# Payment selection menu
+class PaymentOptionsView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="💸 PayPal", style=discord.ButtonStyle.green, custom_id="pay_paypal")
+    async def paypal(self, interaction: discord.Interaction, button: discord.ui.Button):
+        link = f"https://your-payment-link.com/paypal?user_id={interaction.user.id}"
+        await interaction.response.send_message(
+            f"🌐 Click to pay via PayPal: [Pay €2.99]({link})",
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="💳 Google/Apple/Card", style=discord.ButtonStyle.gray, custom_id="pay_stripe")
+    async def stripe(self, interaction: discord.Interaction, button: discord.ui.Button):
+        link = f"https://your-payment-link.com/stripe?user_id={interaction.user.id}"
+        await interaction.response.send_message(
+            f"🌐 Click to pay via Stripe (Card, Apple Pay, Google Pay): [Pay €2.99]({link})",
+            ephemeral=True
+        )
 
 # --- Events ---
 @bot.event
@@ -205,70 +272,6 @@ async def menu(ctx):
     if ctx.channel.id == CHANNEL_ID:
         await setup_menu(ctx.channel)
         await ctx.send("✅ Menu refreshed.")
-
-# --- Access Flow Additions ---
-ACCESS_ROLE_ID = 1227708209356345454  # Your premium role ID
-
-class AccessView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="🔓 Get Access", style=discord.ButtonStyle.green, custom_id="get_access")
-    async def get_access(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            "💳 Please choose your payment method:",
-            view=PaymentOptions(),
-            ephemeral=True
-        )
-
-class PaymentOptions(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="💳 Pay with Stripe", style=discord.ButtonStyle.blurple, custom_id="pay_stripe")
-    async def stripe(self, interaction: discord.Interaction, button: discord.ui.Button):
-        fake_link = f"https://fake-stripe.com/checkout?user={interaction.user.id}"
-        await interaction.response.send_message(
-            f"🧾 Click below to pay €2.99 and unlock full access:\n{fake_link}",
-            ephemeral=True
-        )
-
-    @discord.ui.button(label="🅿️ Pay with PayPal", style=discord.ButtonStyle.gray, custom_id="pay_paypal")
-    async def paypal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        fake_link = f"https://fake-paypal.com/checkout?user={interaction.user.id}"
-        await interaction.response.send_message(
-            f"🧾 Click below to pay €2.99 and unlock full access:\n{fake_link}",
-            ephemeral=True
-        )
-
-# Command to simulate payment and grant access
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def simulate_payment(ctx, member: discord.Member):
-    role = ctx.guild.get_role(ACCESS_ROLE_ID)
-    if not role:
-        await ctx.send("❌ Role not found.")
-        return
-    await member.add_roles(role)
-    credits = get_user_credits(member.id)
-    if credits < 100:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute("UPDATE user_credits SET credits = 100 WHERE user_id = ?", (member.id,))
-        conn.commit()
-        conn.close()
-    await ctx.send(f"✅ {member.mention} has been granted access and 100 credits!")
-
-# Auto-send "Get Access" menu when someone joins
-@bot.event
-async def on_member_join(member):
-    channel = bot.get_channel(CHANNEL_ID)
-    if not channel:
-        return
-    await channel.send(
-        f"👋 Welcome {member.mention}! To get started, unlock access below 👇",
-        view=AccessView()
-    )
 
 # Run bot
 bot.run(TOKEN)
