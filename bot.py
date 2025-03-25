@@ -17,7 +17,7 @@ if not TOKEN or not RUNWAY_API_KEY:
     exit(1)
 
 DB_FILE = "credits.db"
-ACCESS_ROLE_ID = 123456789012345678  # Define your access role ID here
+ACCESS_ROLE_ID = 1227708209356345454  # Define your access role ID here
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -149,28 +149,31 @@ class GatekeeperView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="🚪 Open Menu", style=discord.ButtonStyle.green, custom_id="open_menu")
-    async def open_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.guild:
-            await interaction.response.send_message("❌ This button must be used inside a server.", ephemeral=True)
-            return
+  @discord.ui.button(label="🚪 Open Menu", style=discord.ButtonStyle.green, custom_id="open_menu")
+async def open_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
+    if not interaction.guild:
+        await interaction.response.send_message("❌ This button must be used inside a server.", ephemeral=True)
+        return
 
-        role = interaction.guild.get_role(ACCESS_ROLE_ID)
-        if not role:
-            await interaction.response.send_message("❌ Access role not found.", ephemeral=True)
-            return
+    # Fetch the role using the stored ID
+    role = interaction.guild.get_role(ACCESS_ROLE_ID)
+    if not role:
+        await interaction.response.send_message("❌ Access role not found. Please contact an admin.", ephemeral=True)
+        return
 
-        if role in interaction.user.roles:
-            await interaction.response.send_message(
-                "✅ Access granted! Opening main menu...",
-                view=MainMenu(),
-                ephemeral=True
-            )
-        else:
-            await interaction.response.send_message(
-                "🔒 You need access to unlock video generation tools.",
-                ephemeral=True
-            )
+    # Check if the user has the role correctly
+    if any(r.id == ACCESS_ROLE_ID for r in interaction.user.roles):
+        await interaction.response.send_message(
+            "✅ Access granted! Opening main menu...",
+            view=MainMenu(),
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            "🔒 You need access to unlock video generation tools.",
+            view=AccessView(),
+            ephemeral=True
+        )
 
 # Start the bot
 @bot.event
