@@ -149,31 +149,29 @@ class GatekeeperView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-  @discord.ui.button(label="🚪 Open Menu", style=discord.ButtonStyle.green, custom_id="open_menu")
-async def open_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-    if not interaction.guild:
-        await interaction.response.send_message("❌ This button must be used inside a server.", ephemeral=True)
-        return
+    @discord.ui.button(label="🚪 Open Menu", style=discord.ButtonStyle.green, custom_id="open_menu")
+    async def open_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.guild:
+            await interaction.response.send_message("❌ This button must be used inside a server.", ephemeral=True)
+            return
 
-    # Fetch the role using the stored ID
-    role = interaction.guild.get_role(ACCESS_ROLE_ID)
-    if not role:
-        await interaction.response.send_message("❌ Access role not found. Please contact an admin.", ephemeral=True)
-        return
+        role = interaction.guild.get_role(ACCESS_ROLE_ID)
+        if not role:
+            await interaction.response.send_message("❌ Access role not found. Please contact an admin.", ephemeral=True)
+            return
 
-    # Check if the user has the role correctly
-    if any(r.id == ACCESS_ROLE_ID for r in interaction.user.roles):
-        await interaction.response.send_message(
-            "✅ Access granted! Opening main menu...",
-            view=MainMenu(),
-            ephemeral=True
-        )
-    else:
-        await interaction.response.send_message(
-            "🔒 You need access to unlock video generation tools.",
-            view=AccessView(),
-            ephemeral=True
-        )
+        if any(r.id == ACCESS_ROLE_ID for r in interaction.user.roles):
+            await interaction.response.send_message(
+                "✅ Access granted! Opening main menu...",
+                view=MainMenu(),
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "🔒 You need access to unlock video generation tools.",
+                view=AccessView(),
+                ephemeral=True
+            )
 
 # Start the bot
 @bot.event
