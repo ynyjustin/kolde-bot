@@ -85,6 +85,9 @@ async def ensure_menu_pinned():
         print("❌ ERROR: Channel not found!")
         return
 
+    # Debugging to confirm the channel is retrieved successfully
+    print(f"✅ Successfully retrieved the channel: {channel.name}")
+
     async for message in channel.history(limit=10):
         if message.author == bot.user and message.embeds:
             return  # Don't repost if already sent
@@ -198,36 +201,35 @@ class MainMenu(discord.ui.View):
             "🛍️ Buy more credits here:\nhttps://www.aivideoapi.com/dashboard",
             ephemeral=True
         )
-        ACCESS_ROLE_ID = 1227708209356345454  # Your premium access role
 
 # View shown to everyone on first load
 class GatekeeperView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-  @discord.ui.button(label="🚪 Open Menu", style=discord.ButtonStyle.green, custom_id="open_menu")
-async def open_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-    if not interaction.guild:
-        await interaction.response.send_message("❌ This button must be used inside a server.", ephemeral=True)
-        return
+    @discord.ui.button(label="🚪 Open Menu", style=discord.ButtonStyle.green, custom_id="open_menu")
+    async def open_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.guild:
+            await interaction.response.send_message("❌ This button must be used inside a server.", ephemeral=True)
+            return
 
-    role = interaction.guild.get_role(ACCESS_ROLE_ID)
-    if not role:
-        await interaction.response.send_message("❌ Access role not found.", ephemeral=True)
-        return
+        role = interaction.guild.get_role(ACCESS_ROLE_ID)
+        if not role:
+            await interaction.response.send_message("❌ Access role not found.", ephemeral=True)
+            return
 
-    if role in interaction.user.roles:
-        await interaction.response.send_message(
-            "✅ Access granted! Opening main menu...",
-            view=MainMenu(),
-            ephemeral=True
-        )
-    else:
-        await interaction.response.send_message(
-            "🔒 You need access to unlock video generation tools.",
-            view=AccessView(),
-            ephemeral=True
-        )
+        if role in interaction.user.roles:
+            await interaction.response.send_message(
+                "✅ Access granted! Opening main menu...",
+                view=MainMenu(),
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "🔒 You need access to unlock video generation tools.",
+                view=AccessView(),
+                ephemeral=True
+            )
 
 # View for users without access
 class AccessView(discord.ui.View):
@@ -256,35 +258,4 @@ class PaymentOptionsView(discord.ui.View):
         )
 
     @discord.ui.button(label="💳 Google/Apple/Card", style=discord.ButtonStyle.gray, custom_id="pay_stripe")
-    async def stripe(self, interaction: discord.Interaction, button: discord.ui.Button):
-        link = f"https://your-payment-link.com/stripe?user_id={interaction.user.id}"
-        await interaction.response.send_message(
-            f"🌐 Click to pay via Stripe (Card, Apple Pay, Google Pay): [Pay €2.99]({link})",
-            ephemeral=True
-        )
-
-# --- Events ---
-@bot.event
-async def on_ready():
-    print(f"✅ Logged in as {bot.user}")
-    init_db()
-    await ensure_menu_pinned()
-
-# Optional: Command to refresh menu manually
-@bot.command()
-async def menu(ctx):
-    if ctx.channel.id == CHANNEL_ID:
-        await setup_menu(ctx.channel)
-        await ctx.send("✅ Menu refreshed.")
-        
-        @bot.event
-async def on_application_command_error(ctx, error):
-    print(f"⚠️ Command error: {error}")
-
-@bot.event
-async def on_error(event, *args, **kwargs):
-    print(f"⚠️ General error in {event}: {args}, {kwargs}")
-
-
-# Run bot
-bot.run(TOKEN)
+    async def stripe
