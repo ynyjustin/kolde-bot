@@ -258,4 +258,4 @@ class PaymentOptionsView(discord.ui.View):
         )
 
     @discord.ui.button(label="💳 Google/Apple/Card", style=discord.ButtonStyle.gray, custom_id="pay_stripe")
-    async def stripe
+    async def stripe():
