@@ -17,6 +17,7 @@ if not TOKEN or not RUNWAY_API_KEY:
     exit(1)
 
 DB_FILE = "credits.db"
+ACCESS_ROLE_ID = 123456789012345678  # Define your access role ID here
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -258,4 +259,12 @@ class PaymentOptionsView(discord.ui.View):
         )
 
     @discord.ui.button(label="💳 Google/Apple/Card", style=discord.ButtonStyle.gray, custom_id="pay_stripe")
-    async def stripe():
+    async def stripe(self, interaction: discord.Interaction, button: discord.ui.Button):
+        link = f"https://your-payment-link.com/stripe?user_id={interaction.user.id}"
+        await interaction.response.send_message(
+            f"🌐 Click to pay via Stripe: [Pay €2.99]({link})",
+            ephemeral=True
+        )
+
+# Start the bot
+bot.run(TOKEN)
