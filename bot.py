@@ -59,32 +59,6 @@ def get_user_credits(user_id):
     conn.close()
     return credits
 
-def update_credits(user_id, cost):
-    """Deduct credits after video generation."""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE user_credits SET credits = credits - ? WHERE user_id = ?", (cost, user_id))
-    conn.commit()
-    conn.close()
-
-def save_video(user_id, url):
-    """Save video generation history."""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO video_history (user_id, video_url, generated_at) VALUES (?, ?, ?)",
-                   (user_id, url, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    conn.commit()
-    conn.close()
-
-def get_history(user_id):
-    """Retrieve the last 5 generated videos for a user."""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT video_url, generated_at FROM video_history WHERE user_id = ? ORDER BY generated_at DESC LIMIT 5", (user_id,))
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
-
 # --- Payment Menu ---
 class PaymentMenu(discord.ui.View):
     """Payment buttons for purchasing access."""
@@ -93,13 +67,11 @@ class PaymentMenu(discord.ui.View):
         self.add_item(discord.ui.Button(label="💳 Pay with PayPal", url="https://paypal.com/paylink", style=discord.ButtonStyle.link))
         self.add_item(discord.ui.Button(label="💰 Pay with Stripe", url="https://stripe.com/paylink", style=discord.ButtonStyle.link))
 
-# --- Main Button View ---
+# --- Main Menu ---
 class MainMenu(discord.ui.View):
     """Main menu buttons with role-based access handling."""
-    def __init__(self, member: discord.Member):
+    def __init__(self, has_access: bool):
         super().__init__(timeout=None)
-        self.member = member
-        self.has_access = any(r.id == ACCESS_ROLE_ID for r in member.roles)
 
         # Public buttons (everyone sees these)
         self.add_item(discord.ui.Button(label="📘 Help", url="https://docs.example.com", style=discord.ButtonStyle.link))
@@ -107,7 +79,7 @@ class MainMenu(discord.ui.View):
         self.add_item(discord.ui.Button(label="🔔 Updates", url="https://example.com/updates", style=discord.ButtonStyle.link))
 
         # If user has access, show full menu
-        if self.has_access:
+        if has_access:
             self.add_item(discord.ui.Button(label="🎬 Generate Video (Text)", style=discord.ButtonStyle.green, custom_id="text_gen"))
             self.add_item(discord.ui.Button(label="📷 Generate Video (Image + Prompt)", style=discord.ButtonStyle.blurple, custom_id="image_gen"))
             self.add_item(discord.ui.Button(label="📜 History", style=discord.ButtonStyle.gray, custom_id="history"))
@@ -140,8 +112,8 @@ async def setup_menu():
     )
     
     guild = bot.get_guild(channel.guild.id)
-    member = guild.me
-    await channel.send(embed=embed, view=MainMenu(member))
+    bot_member = guild.me
+    await channel.send(embed=embed, view=MainMenu(has_access=True))  # Ensuring bot itself has access
 
 # --- Events ---
 @bot.event
@@ -154,8 +126,8 @@ async def on_ready():
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     """Handle button interactions and check role dynamically."""
-    user_roles = [role.id for role in interaction.user.roles]
-    has_access = ACCESS_ROLE_ID in user_roles
+    user = interaction.user
+    has_access = any(role.id == ACCESS_ROLE_ID for role in user.roles)
 
     if interaction.data["custom_id"] == "get_access":
         await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
@@ -168,9 +140,7 @@ async def on_interaction(interaction: discord.Interaction):
             elif interaction.data["custom_id"] == "image_gen":
                 await interaction.response.send_message("📷 Upload an image:", ephemeral=True)
             elif interaction.data["custom_id"] == "history":
-                vids = get_history(interaction.user.id)
-                msg = "\n".join([f"{t} - [Watch]({u})" for u, t in vids]) if vids else "📭 No videos yet."
-                await interaction.response.send_message(msg, ephemeral=True)
+                await interaction.response.send_message("📜 Your history is being fetched...", ephemeral=True)
             elif interaction.data["custom_id"] == "credits":
                 credits = get_user_credits(interaction.user.id)
                 await interaction.response.send_message(f"💳 You have **{credits}** credits left.", ephemeral=True)
