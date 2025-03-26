@@ -9,17 +9,17 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-CHANNEL_ID = 1227704136552939551  # Fixed channel ID
-ACCESS_ROLE_ID = 1227708209356345454  # Required role ID
+RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
+CHANNEL_ID = 1227704136552939551  # Your fixed channel
+ACCESS_ROLE_ID = 1227708209356345454  # Role required for access
 
-if not TOKEN:
-    print("❌ ERROR: Missing bot token!")
+if not TOKEN or not RUNWAY_API_KEY:
+    print("❌ ERROR: Missing bot token or API key!")
     exit(1)
 
 DB_FILE = "credits.db"
 
 def init_db():
-    """Initialize the SQLite database for credits and history."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("""
@@ -44,13 +44,12 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # --- Helpers ---
 def get_user_credits(user_id):
-    """Fetch the user's current credit balance."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT credits FROM user_credits WHERE user_id = ?", (user_id,))
     row = cursor.fetchone()
     if not row:
-        cursor.execute("INSERT INTO user_credits (user_id, credits) VALUES (?, 100)", (user_id,))
+        cursor.execute("INSERT INTO user_credits (user_id, credits) VALUES (?, ?)", (user_id, 100))
         conn.commit()
         credits = 100
     else:
@@ -59,7 +58,6 @@ def get_user_credits(user_id):
     return credits
 
 def update_credits(user_id, cost):
-    """Deduct credits after a video generation."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("UPDATE user_credits SET credits = credits - ? WHERE user_id = ?", (cost, user_id))
@@ -67,7 +65,6 @@ def update_credits(user_id, cost):
     conn.close()
 
 def save_video(user_id, url):
-    """Save generated video details."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO video_history (user_id, video_url, generated_at) VALUES (?, ?, ?)",
@@ -75,92 +72,45 @@ def save_video(user_id, url):
     conn.commit()
     conn.close()
 
-async def refresh_user_menu(interaction: discord.Interaction, has_access: bool):
-    """Updates the menu dynamically for the user who clicked Get Access."""
-    embed = discord.Embed(
-        title="🎬 Kolde AI Video Generator",
-        description="Use text or images to generate AI-powered videos.\n\n"
-                    "**Each generation costs 20 credits.** New users get 100 credits free!\n\n"
-                    "💡 Use detailed prompts for better results.\n"
-                    "🛍️ Buy more credits using the buttons below.",
-        color=discord.Color.dark_blue()
-    )
-    await interaction.response.edit_message(embed=embed, view=MainMenu(has_access))
-
-# --- Payment Menu ---
-class PaymentMenu(discord.ui.View):
-    """Payment buttons for purchasing access."""
-    def __init__(self):
-        super().__init__()
-        self.add_item(discord.ui.Button(label="💳 Pay with PayPal", url="https://paypal.com/paylink", style=discord.ButtonStyle.link))
-        self.add_item(discord.ui.Button(label="💰 Pay with Stripe", url="https://stripe.com/paylink", style=discord.ButtonStyle.link))
-    
-    @discord.ui.button(label="🔑 Login", style=discord.ButtonStyle.green, custom_id="confirm_payment")
-    async def confirm_payment(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """User confirms payment, menu refreshes dynamically."""
-        member = interaction.guild.get_member(interaction.user.id)
-        if not member:
-            await interaction.response.send_message("❌ Error fetching your role!", ephemeral=True)
-            return
-
-        role = discord.utils.get(interaction.guild.roles, id=ACCESS_ROLE_ID)
-        if role and role not in member.roles:
-            await member.add_roles(role)  # Grant access role
-            await interaction.user.send("🎉 Access granted! You now have full functionality.")
-
-        await refresh_user_menu(interaction, has_access=True)
-
-# --- Main Menu ---
-class MainMenu(discord.ui.View):
-    """Main menu buttons with role-based access handling."""
-    def __init__(self, has_access: bool):
-        super().__init__(timeout=None)
-
-        # Public buttons (everyone sees these)
-        self.add_item(discord.ui.Button(label="📘 Help", url="https://docs.example.com", style=discord.ButtonStyle.link))
-        self.add_item(discord.ui.Button(label="📄 Prompt Guide", url="https://example.com/prompt-guide", style=discord.ButtonStyle.link))
-        self.add_item(discord.ui.Button(label="🔔 Updates", url="https://example.com/updates", style=discord.ButtonStyle.link))
-
-        # If user has access, show full menu
-        if has_access:
-            self.add_item(discord.ui.Button(label="🎬 Generate Video (Text)", style=discord.ButtonStyle.green, custom_id="text_gen"))
-            self.add_item(discord.ui.Button(label="📷 Generate Video (Image + Prompt)", style=discord.ButtonStyle.blurple, custom_id="image_gen"))
-            self.add_item(discord.ui.Button(label="📜 History", style=discord.ButtonStyle.gray, custom_id="history"))
-            self.add_item(discord.ui.Button(label="💰 Check Credits", style=discord.ButtonStyle.gray, custom_id="credits"))
-        else:
-            self.add_item(discord.ui.Button(label="🚀 Get Access", style=discord.ButtonStyle.red, custom_id="get_access"))
-
-async def setup_menu():
-    """Ensure the menu is posted in the designated channel."""
-    await bot.wait_until_ready()
+async def ensure_menu_pinned():
     channel = bot.get_channel(CHANNEL_ID)
     if not channel:
         print("❌ ERROR: Channel not found!")
         return
-    
     async for message in channel.history(limit=10):
         if message.author == bot.user and message.embeds:
-            return  # Menu already exists
+            return
+    await setup_menu(channel)
 
+async def setup_menu(channel):
     embed = discord.Embed(
-        title="🎬 Kolde AI Video Generator",
-        description="Use text or images to generate AI-powered videos.\n\n"
-                    "**Each generation costs 20 credits.** New users get 100 credits free!\n\n"
-                    "💡 Use detailed prompts for better results.\n"
-                    "🛍️ Buy more credits using the buttons below.",
+        title="🎬 Welcome to Kolde AI Video Generator",
+        description=(
+            "Generate high-quality AI videos using text or image + prompt.\n"
+            "**Each generation costs 20 credits**. New users get 100 credits for free!\n\n"
+            "💡 *Tips for prompts:* Use specific descriptions, mention style, mood, and action.\n"
+            "🛍️ You can buy credits using the red button below.\n"
+            "📜 Use the buttons below to interact with the bot."
+        ),
         color=discord.Color.dark_blue()
     )
+    await channel.send(embed=embed, view=MainMenu())
 
-    await channel.send(embed=embed, view=MainMenu(has_access=False))
+# --- Main Button View ---
+class MainMenu(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+        # First row - Login and Get Access buttons
+        self.add_item(discord.ui.Button(label="🔓 Login", style=discord.ButtonStyle.blurple, custom_id="login", row=0))
+        self.add_item(discord.ui.Button(label="🔒 Get Access", style=discord.ButtonStyle.red, custom_id="get_access", row=0))
+
+        # Second row - Help & Guides
+        self.add_item(discord.ui.Button(label="📘 Help", url="https://docs.example.com", style=discord.ButtonStyle.link, row=1))
+        self.add_item(discord.ui.Button(label="📄 Prompt Guide", url="https://example.com/prompt-guide", style=discord.ButtonStyle.link, row=1))
+        self.add_item(discord.ui.Button(label="🔔 Updates", url="https://example.com/updates", style=discord.ButtonStyle.link, row=1))
 
 # --- Events ---
-@bot.event
-async def on_ready():
-    """Initialize bot and ensure menu is pinned."""
-    print(f"✅ Logged in as {bot.user}")
-    init_db()
-    bot.loop.create_task(setup_menu())
-
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     """Handle button interactions and ensure role-based access dynamically."""
@@ -173,16 +123,11 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
-    if interaction.data["custom_id"] == "confirm_payment":
+    if interaction.data["custom_id"] == "login":
         if has_access:
             await interaction.response.send_message("✅ You already have access!", ephemeral=True)
         else:
-            role = discord.utils.get(interaction.guild.roles, id=ACCESS_ROLE_ID)
-            if role:
-                await member.add_roles(role)
-                await interaction.response.send_message("✅ Access granted!", ephemeral=True)
-            else:
-                await interaction.response.send_message("⚠️ Role not found. Contact an admin.", ephemeral=True)
+            await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
     if interaction.data["custom_id"] in ["text_gen", "image_gen"]:
@@ -201,6 +146,8 @@ async def on_interaction(interaction: discord.Interaction):
 
         try:
             msg = await bot.wait_for("message", check=check, timeout=60)  # Wait for 60 seconds
+            prompt = msg.content
+            await msg.delete()  # ✅ Delete user's message after receiving
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
@@ -221,11 +168,25 @@ async def on_interaction(interaction: discord.Interaction):
         except discord.Forbidden:
             await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
 
+@bot.event
+async def on_ready():
+    print(f"✅ Logged in as {bot.user}")
+    init_db()
+    await ensure_menu_pinned()
+
+# --- Payment Menu ---
+class PaymentMenu(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(label="💳 Pay with PayPal", url="https://paypal.com", style=discord.ButtonStyle.blurple))
+        self.add_item(discord.ui.Button(label="💳 Pay with Stripe", url="https://stripe.com", style=discord.ButtonStyle.blurple))
+        self.add_item(discord.ui.Button(label="✅ Confirm Payment", style=discord.ButtonStyle.green, custom_id="confirm_payment"))
+
+# Optional: Refresh menu manually
 @bot.command()
 async def menu(ctx):
-    """Manually refresh the menu based on the user's role."""
-    member = ctx.guild.get_member(ctx.author.id)
-    has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles)
-    await ctx.send("✅ Menu refreshed.", view=MainMenu(has_access=has_access))
+    if ctx.channel.id == CHANNEL_ID:
+        await setup_menu(ctx.channel)
+        await ctx.send("✅ Menu refreshed.")
 
 bot.run(TOKEN)
