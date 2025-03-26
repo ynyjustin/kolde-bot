@@ -9,12 +9,11 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
 CHANNEL_ID = 1227704136552939551  # Fixed channel ID
 ACCESS_ROLE_ID = 1227708209356345454  # Required role ID
 
-if not TOKEN or not RUNWAY_API_KEY:
-    print("❌ ERROR: Missing bot token or API key!")
+if not TOKEN:
+    print("❌ ERROR: Missing bot token!")
     exit(1)
 
 DB_FILE = "credits.db"
@@ -59,6 +58,23 @@ def get_user_credits(user_id):
     conn.close()
     return credits
 
+def update_credits(user_id, cost):
+    """Deduct credits after a video generation."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE user_credits SET credits = credits - ? WHERE user_id = ?", (cost, user_id))
+    conn.commit()
+    conn.close()
+
+def save_video(user_id, url):
+    """Save generated video details."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO video_history (user_id, video_url, generated_at) VALUES (?, ?, ?)",
+                   (user_id, url, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    conn.commit()
+    conn.close()
+
 async def refresh_user_menu(interaction: discord.Interaction, has_access: bool):
     """Updates the menu dynamically for the user who clicked Get Access."""
     embed = discord.Embed(
@@ -69,7 +85,6 @@ async def refresh_user_menu(interaction: discord.Interaction, has_access: bool):
                     "🛍️ Buy more credits using the buttons below.",
         color=discord.Color.dark_blue()
     )
-
     await interaction.response.edit_message(embed=embed, view=MainMenu(has_access))
 
 # --- Payment Menu ---
@@ -80,7 +95,7 @@ class PaymentMenu(discord.ui.View):
         self.add_item(discord.ui.Button(label="💳 Pay with PayPal", url="https://paypal.com/paylink", style=discord.ButtonStyle.link))
         self.add_item(discord.ui.Button(label="💰 Pay with Stripe", url="https://stripe.com/paylink", style=discord.ButtonStyle.link))
     
-    @discord.ui.button(label="✅ I've Paid", style=discord.ButtonStyle.green, custom_id="confirm_payment")
+    @discord.ui.button(label="🔑 Login", style=discord.ButtonStyle.green, custom_id="confirm_payment")
     async def confirm_payment(self, interaction: discord.Interaction, button: discord.ui.Button):
         """User confirms payment, menu refreshes dynamically."""
         member = interaction.guild.get_member(interaction.user.id)
@@ -88,16 +103,11 @@ class PaymentMenu(discord.ui.View):
             await interaction.response.send_message("❌ Error fetching your role!", ephemeral=True)
             return
 
-        # Check if user already has the role
         role = discord.utils.get(interaction.guild.roles, id=ACCESS_ROLE_ID)
-        if role:
-            if role not in member.roles:
-                await member.add_roles(role)  # Grant access role
-                await interaction.user.send("🎉 Access granted! You now have full functionality.")
-            else:
-                await interaction.user.send("✅ You already have access!")
+        if role and role not in member.roles:
+            await member.add_roles(role)  # Grant access role
+            await interaction.user.send("🎉 Access granted! You now have full functionality.")
 
-        # Refresh the menu with full access for the user
         await refresh_user_menu(interaction, has_access=True)
 
 # --- Main Menu ---
@@ -141,7 +151,7 @@ async def setup_menu():
         color=discord.Color.dark_blue()
     )
 
-    await channel.send(embed=embed, view=MainMenu(has_access=False))  # Default menu for users without access
+    await channel.send(embed=embed, view=MainMenu(has_access=False))
 
 # --- Events ---
 @bot.event
@@ -149,39 +159,38 @@ async def on_ready():
     """Initialize bot and ensure menu is pinned."""
     print(f"✅ Logged in as {bot.user}")
     init_db()
-    bot.loop.create_task(setup_menu())  # Fixes menu not appearing
+    bot.loop.create_task(setup_menu())
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     """Handle button interactions and check role dynamically."""
     user = interaction.user
-    guild = interaction.guild  # Get the guild from interaction
-
-    if guild:
-        member = guild.get_member(user.id)  # Fetch full member object with roles
-        if member:
-            has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles)
-        else:
-            has_access = False
-    else:
-        has_access = False
+    guild = interaction.guild
+    member = guild.get_member(user.id) if guild else None
+    has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles) if member else False
 
     if interaction.data["custom_id"] == "get_access":
         await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
-    if interaction.data["custom_id"] in ["text_gen", "image_gen", "history", "credits"]:
-        if has_access:
-            await interaction.response.send_message("✅ You have access!", ephemeral=True)
-        else:
+    if interaction.data["custom_id"] in ["text_gen", "image_gen"]:
+        if not has_access:
             await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
+            return
+        
+        # Process video generation
+        await interaction.response.send_message("⏳ Processing your request...", ephemeral=True)
+        await asyncio.sleep(5)  # Simulate processing
+        url = f"https://example.com/video/{user.id}"
+        save_video(user.id, url)
+        update_credits(user.id, 20)
+        await user.send(f"🎥 Your video is ready!\n{url}")
 
 @bot.command()
 async def menu(ctx):
     """Manually refresh the menu based on the user's role."""
-    if ctx.channel.id == CHANNEL_ID:
-        member = ctx.guild.get_member(ctx.author.id)
-        has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles)
-        await ctx.send("✅ Menu refreshed.", view=MainMenu(has_access=has_access))
+    member = ctx.guild.get_member(ctx.author.id)
+    has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles)
+    await ctx.send("✅ Menu refreshed.", view=MainMenu(has_access=has_access))
 
 bot.run(TOKEN)
