@@ -51,13 +51,26 @@ def get_user_credits(user_id):
     cursor.execute("SELECT credits FROM user_credits WHERE user_id = ?", (user_id,))
     row = cursor.fetchone()
     if not row:
-        cursor.execute("INSERT INTO user_credits (user_id, credits) VALUES (?, ?)", (user_id, 100))
+        cursor.execute("INSERT INTO user_credits (user_id, credits) VALUES (?, 100)", (user_id,))
         conn.commit()
         credits = 100
     else:
         credits = row[0]
     conn.close()
     return credits
+
+async def refresh_user_menu(interaction: discord.Interaction, has_access: bool):
+    """Updates the menu dynamically for the user who clicked Get Access."""
+    embed = discord.Embed(
+        title="🎬 Kolde AI Video Generator",
+        description="Use text or images to generate AI-powered videos.\n\n"
+                    "**Each generation costs 20 credits.** New users get 100 credits free!\n\n"
+                    "💡 Use detailed prompts for better results.\n"
+                    "🛍️ Buy more credits using the buttons below.",
+        color=discord.Color.dark_blue()
+    )
+
+    await interaction.response.edit_message(embed=embed, view=MainMenu(has_access))
 
 # --- Payment Menu ---
 class PaymentMenu(discord.ui.View):
@@ -66,6 +79,26 @@ class PaymentMenu(discord.ui.View):
         super().__init__()
         self.add_item(discord.ui.Button(label="💳 Pay with PayPal", url="https://paypal.com/paylink", style=discord.ButtonStyle.link))
         self.add_item(discord.ui.Button(label="💰 Pay with Stripe", url="https://stripe.com/paylink", style=discord.ButtonStyle.link))
+    
+    @discord.ui.button(label="✅ I've Paid", style=discord.ButtonStyle.green, custom_id="confirm_payment")
+    async def confirm_payment(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """User confirms payment, menu refreshes dynamically."""
+        member = interaction.guild.get_member(interaction.user.id)
+        if not member:
+            await interaction.response.send_message("❌ Error fetching your role!", ephemeral=True)
+            return
+
+        # Check if user already has the role
+        role = discord.utils.get(interaction.guild.roles, id=ACCESS_ROLE_ID)
+        if role:
+            if role not in member.roles:
+                await member.add_roles(role)  # Grant access role
+                await interaction.user.send("🎉 Access granted! You now have full functionality.")
+            else:
+                await interaction.user.send("✅ You already have access!")
+
+        # Refresh the menu with full access for the user
+        await refresh_user_menu(interaction, has_access=True)
 
 # --- Main Menu ---
 class MainMenu(discord.ui.View):
@@ -85,7 +118,6 @@ class MainMenu(discord.ui.View):
             self.add_item(discord.ui.Button(label="📜 History", style=discord.ButtonStyle.gray, custom_id="history"))
             self.add_item(discord.ui.Button(label="💰 Check Credits", style=discord.ButtonStyle.gray, custom_id="credits"))
         else:
-            # If no access, show Get Access button
             self.add_item(discord.ui.Button(label="🚀 Get Access", style=discord.ButtonStyle.red, custom_id="get_access"))
 
 async def setup_menu():
@@ -101,13 +133,11 @@ async def setup_menu():
             return  # Menu already exists
 
     embed = discord.Embed(
-        title="🎬 Welcome to Kolde AI Video Generator",
-        description=(
-            "Generate high-quality AI videos using text or images.\n"
-            "**Each generation costs 20 credits**. New users get 100 credits for free!\n\n"
-            "💡 Use specific prompts for better results.\n"
-            "🛍️ Buy credits using the red button below.\n"
-        ),
+        title="🎬 Kolde AI Video Generator",
+        description="Use text or images to generate AI-powered videos.\n\n"
+                    "**Each generation costs 20 credits.** New users get 100 credits free!\n\n"
+                    "💡 Use detailed prompts for better results.\n"
+                    "🛍️ Buy more credits using the buttons below.",
         color=discord.Color.dark_blue()
     )
 
@@ -136,29 +166,19 @@ async def on_interaction(interaction: discord.Interaction):
     else:
         has_access = False
 
-    print(f"DEBUG: {user.name} has roles {[role.id for role in member.roles]}")  # Debugging role IDs
-
     if interaction.data["custom_id"] == "get_access":
         await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
     if interaction.data["custom_id"] in ["text_gen", "image_gen", "history", "credits"]:
         if has_access:
-            if interaction.data["custom_id"] == "text_gen":
-                await interaction.response.send_message("✏️ Enter your video prompt:", ephemeral=True)
-            elif interaction.data["custom_id"] == "image_gen":
-                await interaction.response.send_message("📷 Upload an image:", ephemeral=True)
-            elif interaction.data["custom_id"] == "history":
-                await interaction.response.send_message("📜 Your history is being fetched...", ephemeral=True)
-            elif interaction.data["custom_id"] == "credits":
-                credits = get_user_credits(interaction.user.id)
-                await interaction.response.send_message(f"💳 You have **{credits}** credits left.", ephemeral=True)
+            await interaction.response.send_message("✅ You have access!", ephemeral=True)
         else:
             await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
 
 @bot.command()
 async def menu(ctx):
-    """Manual command to refresh menu based on the command caller's role."""
+    """Manually refresh the menu based on the user's role."""
     if ctx.channel.id == CHANNEL_ID:
         member = ctx.guild.get_member(ctx.author.id)
         has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles)
