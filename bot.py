@@ -125,7 +125,10 @@ async def on_interaction(interaction: discord.Interaction):
 
     if interaction.data["custom_id"] == "login":
         if has_access:
-            await interaction.response.send_message("✅ You already have access!", ephemeral=True)
+            await interaction.response.send_message("✅ Welcome back! Refreshing menu...", ephemeral=True)
+            channel = bot.get_channel(CHANNEL_ID)
+            if channel:
+                await setup_menu(channel)
         else:
             await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
