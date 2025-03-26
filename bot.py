@@ -125,7 +125,18 @@ async def on_ready():
 async def on_interaction(interaction: discord.Interaction):
     """Handle button interactions and check role dynamically."""
     user = interaction.user
-    has_access = any(role.id == ACCESS_ROLE_ID for role in user.roles)
+    guild = interaction.guild  # Get the guild from interaction
+
+    if guild:
+        member = guild.get_member(user.id)  # Fetch full member object with roles
+        if member:
+            has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles)
+        else:
+            has_access = False
+    else:
+        has_access = False
+
+    print(f"DEBUG: {user.name} has roles {[role.id for role in member.roles]}")  # Debugging role IDs
 
     if interaction.data["custom_id"] == "get_access":
         await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
@@ -149,7 +160,8 @@ async def on_interaction(interaction: discord.Interaction):
 async def menu(ctx):
     """Manual command to refresh menu based on the command caller's role."""
     if ctx.channel.id == CHANNEL_ID:
-        has_access = any(role.id == ACCESS_ROLE_ID for role in ctx.author.roles)
+        member = ctx.guild.get_member(ctx.author.id)
+        has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles)
         await ctx.send("✅ Menu refreshed.", view=MainMenu(has_access=has_access))
 
 bot.run(TOKEN)
