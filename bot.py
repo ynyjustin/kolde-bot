@@ -110,10 +110,8 @@ async def setup_menu():
         ),
         color=discord.Color.dark_blue()
     )
-    
-    guild = bot.get_guild(channel.guild.id)
-    bot_member = guild.me
-    await channel.send(embed=embed, view=MainMenu(has_access=True))  # Ensuring bot itself has access
+
+    await channel.send(embed=embed, view=MainMenu(has_access=False))  # Default menu for users without access
 
 # --- Events ---
 @bot.event
@@ -149,9 +147,9 @@ async def on_interaction(interaction: discord.Interaction):
 
 @bot.command()
 async def menu(ctx):
-    """Manual command to refresh menu."""
+    """Manual command to refresh menu based on the command caller's role."""
     if ctx.channel.id == CHANNEL_ID:
-        await setup_menu()
-        await ctx.send("✅ Menu refreshed.")
+        has_access = any(role.id == ACCESS_ROLE_ID for role in ctx.author.roles)
+        await ctx.send("✅ Menu refreshed.", view=MainMenu(has_access=has_access))
 
 bot.run(TOKEN)
