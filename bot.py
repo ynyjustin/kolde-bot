@@ -163,7 +163,7 @@ async def on_ready():
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
-    """Handle button interactions and check role dynamically."""
+    """Handle button interactions and ensure role-based access dynamically."""
     user = interaction.user
     guild = interaction.guild
     member = guild.get_member(user.id) if guild else None
@@ -173,18 +173,53 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
+    if interaction.data["custom_id"] == "confirm_payment":
+        if has_access:
+            await interaction.response.send_message("✅ You already have access!", ephemeral=True)
+        else:
+            role = discord.utils.get(interaction.guild.roles, id=ACCESS_ROLE_ID)
+            if role:
+                await member.add_roles(role)
+                await interaction.response.send_message("✅ Access granted!", ephemeral=True)
+            else:
+                await interaction.response.send_message("⚠️ Role not found. Contact an admin.", ephemeral=True)
+        return
+
     if interaction.data["custom_id"] in ["text_gen", "image_gen"]:
         if not has_access:
             await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
         
-        # Process video generation
-        await interaction.response.send_message("⏳ Processing your request...", ephemeral=True)
-        await asyncio.sleep(5)  # Simulate processing
+        # ✅ **Fix: Defer interaction first to prevent timeout**
+        await interaction.response.defer(ephemeral=True)
+
+        # 🔹 Ask for a prompt from the user
+        await interaction.followup.send("📝 Please enter your prompt:", ephemeral=True)
+
+        def check(msg):
+            return msg.author == user and msg.channel == interaction.channel
+
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=60)  # Wait for 60 seconds
+        except asyncio.TimeoutError:
+            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
+            return
+
+        # 🔹 Simulate processing
+        await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
+        await asyncio.sleep(5)  # Simulate video generation
+
+        # 🔹 Generate a fake video URL (Replace with real API)
         url = f"https://example.com/video/{user.id}"
         save_video(user.id, url)
         update_credits(user.id, 20)
-        await user.send(f"🎥 Your video is ready!\n{url}")
+
+        # 🔹 Send video link in DM
+        try:
+            await user.send(f"🎥 Your video is ready! Click here: {url}")
+            await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
 
 @bot.command()
 async def menu(ctx):
