@@ -28,6 +28,13 @@ def init_db():
             credits INTEGER DEFAULT 100
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS video_history (
+            user_id INTEGER,
+            video_url TEXT,
+            generated_at TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -38,6 +45,15 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 def user_has_access(member):
     """Check if a user has the required role for access."""
     return any(role.id == ACCESS_ROLE_ID for role in member.roles)
+
+def get_video_history(user_id):
+    """Fetch a user's video generation history."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT video_url, generated_at FROM video_history WHERE user_id = ? ORDER BY generated_at DESC LIMIT 5", (user_id,))
+    history = cursor.fetchall()
+    conn.close()
+    return history
 
 # --- Main Menu ---
 class MainMenu(discord.ui.View):
@@ -85,6 +101,21 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
+    if interaction.data["custom_id"] == "history":
+        history = get_video_history(user.id)
+        if history:
+            history_text = "\n".join([f"📅 {date}: [Watch Video]({url})" for url, date in history])
+        else:
+            history_text = "❌ No videos found in your history."
+
+        embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.gold())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    if interaction.data["custom_id"] == "refresh":
+        await interaction.response.edit_message(content="✅ Menu refreshed!", view=FullFunctionMenu())
+        return
+
     if interaction.data["custom_id"] in ["text_gen", "image_gen"]:
         if not has_access:
             await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
@@ -92,7 +123,6 @@ async def on_interaction(interaction: discord.Interaction):
 
         await interaction.response.defer(ephemeral=True)
 
-        # 🔹 Ask for a prompt from the user
         await interaction.followup.send("📝 Please enter your prompt:", ephemeral=True)
 
         def check(msg):
@@ -101,7 +131,7 @@ async def on_interaction(interaction: discord.Interaction):
         try:
             msg = await bot.wait_for("message", check=check, timeout=60)
             prompt = msg.content
-            await msg.delete()  # ✅ Delete user's message after receiving
+            await msg.delete()
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
@@ -147,12 +177,5 @@ async def setup_menu(channel):
         color=discord.Color.dark_blue()
     )
     await channel.send(embed=embed, view=MainMenu())
-
-# --- Refresh Menu ---
-@bot.command()
-async def menu(ctx):
-    if ctx.channel.id == CHANNEL_ID:
-        await setup_menu(ctx.channel)
-        await ctx.send("✅ Menu refreshed.")
 
 bot.run(TOKEN)
