@@ -47,22 +47,22 @@ def user_has_access(member):
 class MainMenu(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(discord.ui.Button(label="🔓 Login", style=discord.ButtonStyle.blurple, custom_id="login", row=0))
-        self.add_item(discord.ui.Button(label="🔒 Get Access", style=discord.ButtonStyle.red, custom_id="get_access", row=0))
+        self.add_item(discord.ui.Button(label="🔓 Login", style=discord.ButtonStyle.blurple, custom_id="login"))
+        self.add_item(discord.ui.Button(label="🔒 Get Access", style=discord.ButtonStyle.red, custom_id="get_access"))
 
-        self.add_item(discord.ui.Button(label="📘 Help", url="https://docs.example.com", style=discord.ButtonStyle.link, row=1))
-        self.add_item(discord.ui.Button(label="📄 Prompt Guide", url="https://example.com/prompt-guide", style=discord.ButtonStyle.link, row=1))
-        self.add_item(discord.ui.Button(label="🔔 Updates", url="https://example.com/updates", style=discord.ButtonStyle.link, row=1))
+        self.add_item(discord.ui.Button(label="📘 Help", url="https://docs.example.com", style=discord.ButtonStyle.link))
+        self.add_item(discord.ui.Button(label="📄 Prompt Guide", url="https://example.com/prompt-guide", style=discord.ButtonStyle.link))
+        self.add_item(discord.ui.Button(label="🔔 Updates", url="https://example.com/updates", style=discord.ButtonStyle.link))
 
-# --- Full Function Menu ---
+# --- Full Function Menu (Only visible to user) ---
 class FullFunctionMenu(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(discord.ui.Button(label="🎥 Video by Text Prompt", style=discord.ButtonStyle.green, custom_id="video_text", row=0))
-        self.add_item(discord.ui.Button(label="🖼️ Video by Image + Text", style=discord.ButtonStyle.green, custom_id="video_image", row=0))
+        self.add_item(discord.ui.Button(label="🎥 Video by Text Prompt", style=discord.ButtonStyle.green, custom_id="video_text"))
+        self.add_item(discord.ui.Button(label="🖼️ Video by Image + Text", style=discord.ButtonStyle.green, custom_id="video_image"))
 
-        self.add_item(discord.ui.Button(label="📜 View History", style=discord.ButtonStyle.blurple, custom_id="history", row=1))
-        self.add_item(discord.ui.Button(label="🔄 Refresh Menu", style=discord.ButtonStyle.gray, custom_id="refresh", row=1))
+        self.add_item(discord.ui.Button(label="📜 View History", style=discord.ButtonStyle.blurple, custom_id="history"))
+        self.add_item(discord.ui.Button(label="🔄 Refresh Menu", style=discord.ButtonStyle.gray, custom_id="refresh"))
 
 # --- Payment Menu ---
 class PaymentMenu(discord.ui.View):
@@ -86,10 +86,7 @@ async def on_interaction(interaction: discord.Interaction):
 
     if interaction.data["custom_id"] == "login":
         if has_access:
-            try:
-                await interaction.message.edit(view=FullFunctionMenu())  
-            except discord.Forbidden:
-                await interaction.followup.send("⚠️ I don't have permission to edit this message!", ephemeral=True)
+            await interaction.followup.send("✅ You now have access to all functions!", view=FullFunctionMenu(), ephemeral=True)  
         else:
             await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
@@ -99,7 +96,6 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
 
-        # 🔹 Ask for input based on the selected function
         prompt_request = "📝 Please enter your prompt:" if interaction.data["custom_id"] == "video_text" else "🖼️ Upload an image and enter a prompt:"
         await interaction.followup.send(prompt_request, ephemeral=True)
 
@@ -111,7 +107,6 @@ async def on_interaction(interaction: discord.Interaction):
             prompt = msg.content
             image_url = None
 
-            # If image + text, check if there's an attachment
             if interaction.data["custom_id"] == "video_image":
                 if msg.attachments:
                     image_url = msg.attachments[0].url
@@ -119,7 +114,7 @@ async def on_interaction(interaction: discord.Interaction):
                     await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
                     return
 
-            await msg.delete()  # ✅ Delete user's message after receiving input
+            await msg.delete()  
 
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
@@ -131,7 +126,6 @@ async def on_interaction(interaction: discord.Interaction):
         url = f"https://example.com/video/{user.id}"
         save_video(user.id, url)
 
-        # 🔹 Send video in DM
         try:
             await user.send(f"🎥 Your video is ready! Click here: {url}")
             await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
@@ -149,8 +143,8 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("📜 No history found!", ephemeral=True)
         else:
             history_text = "\n".join([f"📹 {video}" for video in history])
-            await user.send(f"📜 **Your Video History:**\n{history_text}")
-            await interaction.followup.send("✅ Your history has been sent to DMs!", ephemeral=True)
+            embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
+            await interaction.followup.send(embed=embed, ephemeral=True)  # ✅ Now only the user sees this in the channel
 
 def save_video(user_id, url):
     conn = sqlite3.connect(DB_FILE)
