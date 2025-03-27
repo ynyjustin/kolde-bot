@@ -78,7 +78,6 @@ async def on_interaction(interaction: discord.Interaction):
     member = guild.get_member(user.id) if guild else None
     has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles) if member else False
 
-    # ✅ Defer the response immediately to prevent timeouts
     await interaction.response.defer()
 
     if interaction.data["custom_id"] == "get_access":
@@ -88,37 +87,91 @@ async def on_interaction(interaction: discord.Interaction):
     if interaction.data["custom_id"] == "login":
         if has_access:
             try:
-                await interaction.message.edit(view=FullFunctionMenu())  # ✅ Correct way to update the message
+                await interaction.message.edit(view=FullFunctionMenu())  
             except discord.Forbidden:
                 await interaction.followup.send("⚠️ I don't have permission to edit this message!", ephemeral=True)
         else:
             await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
-    if interaction.data["custom_id"] in ["video_text", "video_image", "history", "refresh"]:
+    if interaction.data["custom_id"] in ["video_text", "video_image"]:
         if not has_access:
             await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
 
-        # 🔹 Simulate processing
-        await interaction.followup.send("⏳ Processing your request...", ephemeral=True)
-        await asyncio.sleep(2)  # Simulate processing
+        # 🔹 Ask for input based on the selected function
+        prompt_request = "📝 Please enter your prompt:" if interaction.data["custom_id"] == "video_text" else "🖼️ Upload an image and enter a prompt:"
+        await interaction.followup.send(prompt_request, ephemeral=True)
 
-        # 🔹 Example response
-        await interaction.followup.send("✅ Action completed!", ephemeral=True)
+        def check(msg):
+            return msg.author == user and msg.channel == interaction.channel
 
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=60)  
+            prompt = msg.content
+            image_url = None
+
+            # If image + text, check if there's an attachment
+            if interaction.data["custom_id"] == "video_image":
+                if msg.attachments:
+                    image_url = msg.attachments[0].url
+                else:
+                    await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
+                    return
+
+            await msg.delete()  # ✅ Delete user's message after receiving input
+
+        except asyncio.TimeoutError:
+            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
+            return
+
+        await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
+        await asyncio.sleep(5)  
+
+        url = f"https://example.com/video/{user.id}"
+        save_video(user.id, url)
+
+        # 🔹 Send video in DM
+        try:
+            await user.send(f"🎥 Your video is ready! Click here: {url}")
+            await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
+
+    if interaction.data["custom_id"] == "history":
+        if not has_access:
+            await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
+            return
+
+        history = fetch_video_history(user.id)
+
+        if not history:
+            await interaction.followup.send("📜 No history found!", ephemeral=True)
+        else:
+            history_text = "\n".join([f"📹 {video}" for video in history])
+            await user.send(f"📜 **Your Video History:**\n{history_text}")
+            await interaction.followup.send("✅ Your history has been sent to DMs!", ephemeral=True)
+
+def save_video(user_id, url):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO video_history (user_id, video_url, generated_at) VALUES (?, ?, ?)", (user_id, url, datetime.utcnow()))
+    conn.commit()
+    conn.close()
+
+def fetch_video_history(user_id):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT video_url FROM video_history WHERE user_id = ?", (user_id,))
+    history = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return history
 
 @bot.event
 async def setup_menu(channel):
     embed = discord.Embed(
         title="🎬 Welcome to Kolde AI Video Generator",
-        description=(
-            "Generate AI-powered videos using text or image + prompt.\n"
-            "**Each generation costs 20 credits**. New users get 100 credits for free!\n\n"
-            "💡 *Tips for prompts:* Be specific, include style, mood, and action.\n"
-            "🛍️ Buy credits using the red button below.\n"
-            "📜 Use the buttons below to interact with the bot."
-        ),
+        description="Generate AI-powered videos using text or image + prompt.",
         color=discord.Color.dark_blue()
     )
     await channel.send(embed=embed, view=MainMenu())
@@ -127,11 +180,8 @@ async def setup_menu(channel):
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
     init_db()
-    
     channel = bot.get_channel(CHANNEL_ID)
     if channel:
         await setup_menu(channel)
-    else:
-        print("❌ ERROR: Channel not found!")
 
 bot.run(TOKEN)
