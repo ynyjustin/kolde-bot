@@ -28,13 +28,6 @@ def init_db():
             credits INTEGER DEFAULT 100
         )
     """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS video_history (
-            user_id INTEGER,
-            video_url TEXT,
-            generated_at TEXT
-        )
-    """)
     conn.commit()
     conn.close()
 
@@ -43,34 +36,8 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # --- Helpers ---
-def get_user_credits(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT credits FROM user_credits WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    if not row:
-        cursor.execute("INSERT INTO user_credits (user_id, credits) VALUES (?, ?)", (user_id, 100))
-        conn.commit()
-        credits = 100
-    else:
-        credits = row[0]
-    conn.close()
-    return credits
-
-def update_credits(user_id, cost):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE user_credits SET credits = credits - ? WHERE user_id = ?", (cost, user_id))
-    conn.commit()
-    conn.close()
-
-def save_video(user_id, url):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO video_history (user_id, video_url, generated_at) VALUES (?, ?, ?)",
-                   (user_id, url, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    conn.commit()
-    conn.close()
+def user_has_access(member):
+    return any(role.id == ACCESS_ROLE_ID for role in member.roles)
 
 async def ensure_menu_pinned():
     channel = bot.get_channel(CHANNEL_ID)
@@ -117,7 +84,12 @@ async def on_interaction(interaction: discord.Interaction):
     user = interaction.user
     guild = interaction.guild
     member = guild.get_member(user.id) if guild else None
-    has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles) if member else False
+
+    if not member:
+        await interaction.response.send_message("❌ Error: Could not retrieve user info.", ephemeral=True)
+        return
+
+    has_access = user_has_access(member)
 
     if interaction.data["custom_id"] == "get_access":
         await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
@@ -125,10 +97,7 @@ async def on_interaction(interaction: discord.Interaction):
 
     if interaction.data["custom_id"] == "login":
         if has_access:
-            await interaction.response.send_message("✅ Welcome back! Refreshing menu...", ephemeral=True)
-            channel = bot.get_channel(CHANNEL_ID)
-            if channel:
-                await setup_menu(channel)
+            await interaction.response.send_message("✅ You already have access!", ephemeral=True)
         else:
             await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
@@ -138,7 +107,6 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
         
-        # ✅ **Fix: Defer interaction first to prevent timeout**
         await interaction.response.defer(ephemeral=True)
 
         # 🔹 Ask for a prompt from the user
@@ -148,23 +116,18 @@ async def on_interaction(interaction: discord.Interaction):
             return msg.author == user and msg.channel == interaction.channel
 
         try:
-            msg = await bot.wait_for("message", check=check, timeout=60)  # Wait for 60 seconds
+            msg = await bot.wait_for("message", check=check, timeout=60)  
             prompt = msg.content
             await msg.delete()  # ✅ Delete user's message after receiving
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
 
-        # 🔹 Simulate processing
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-        await asyncio.sleep(5)  # Simulate video generation
+        await asyncio.sleep(5)  
 
-        # 🔹 Generate a fake video URL (Replace with real API)
         url = f"https://example.com/video/{user.id}"
-        save_video(user.id, url)
-        update_credits(user.id, 20)
-
-        # 🔹 Send video link in DM
+        
         try:
             await user.send(f"🎥 Your video is ready! Click here: {url}")
             await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
