@@ -66,6 +66,7 @@ class FullFunctionMenu(discord.ui.View):
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
+    """Handle button interactions and ensure role-based access dynamically."""
     user = interaction.user
     guild = interaction.guild
     member = guild.get_member(user.id) if guild else None
@@ -75,85 +76,40 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
-if interaction.data["custom_id"] == "login":
-    if has_access:
-        await interaction.response.edit_message(view=FullAccessMenu())
-    else:
-        await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
-    return
+    if interaction.data["custom_id"] == "login":
+        if has_access:
+            await interaction.response.edit_message(view=FullAccessMenu())  # ✅ Show all functions instead of replying
+        else:
+            await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
+        return
 
-    if interaction.data["custom_id"] == "video_text":
+    if interaction.data["custom_id"] in ["text_gen", "image_gen"]:
         if not has_access:
             await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
-        
+
+        # ✅ **Fix: Defer interaction first to prevent timeout**
         await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send("📝 Please enter your text prompt:", ephemeral=True)
+
+        # 🔹 Ask for a prompt from the user
+        await interaction.followup.send("📝 Please enter your prompt:", ephemeral=True)
 
         def check(msg):
             return msg.author == user and msg.channel == interaction.channel
 
         try:
-            msg = await bot.wait_for("message", check=check, timeout=60)
+            msg = await bot.wait_for("message", check=check, timeout=60)  # Wait for 60 seconds
             prompt = msg.content
-            await msg.delete()  # ✅ Delete user's text input
+            await msg.delete()  # ✅ Delete user's message after receiving
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
 
-        # 🔹 Simulate video generation
+        # 🔹 Simulate processing
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-        await asyncio.sleep(5)
+        await asyncio.sleep(5)  # Simulate video generation
 
-        # 🔹 Fake video URL (Replace with real API)
-        url = f"https://example.com/video/{user.id}"
-        save_video(user.id, url)
-        update_credits(user.id, 20)
-
-        # 🔹 Send video link in DM
-        try:
-            await user.send(f"🎥 Your video is ready! Click here: {url}")
-            await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
-        except discord.Forbidden:
-            await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
-
-    if interaction.data["custom_id"] == "video_image_text":
-        if not has_access:
-            await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
-            return
-        
-        await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send("📷 Please upload an image for your video:", ephemeral=True)
-
-        def image_check(msg):
-            return msg.author == user and msg.channel == interaction.channel and msg.attachments
-
-        try:
-            img_msg = await bot.wait_for("message", check=image_check, timeout=60)
-            image_url = img_msg.attachments[0].url
-            await img_msg.delete()  # ✅ Delete image upload
-        except asyncio.TimeoutError:
-            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
-            return
-
-        await interaction.followup.send("📝 Now enter your text prompt for the video:", ephemeral=True)
-
-        def text_check(msg):
-            return msg.author == user and msg.channel == interaction.channel
-
-        try:
-            text_msg = await bot.wait_for("message", check=text_check, timeout=60)
-            text_prompt = text_msg.content
-            await text_msg.delete()  # ✅ Delete text prompt after receiving
-        except asyncio.TimeoutError:
-            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
-            return
-
-        # 🔹 Simulate video generation
-        await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-        await asyncio.sleep(5)
-
-        # 🔹 Fake video URL (Replace with real API)
+        # 🔹 Generate a fake video URL (Replace with real API)
         url = f"https://example.com/video/{user.id}"
         save_video(user.id, url)
         update_credits(user.id, 20)
