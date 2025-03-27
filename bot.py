@@ -64,6 +64,12 @@ class FullFunctionMenu(discord.ui.View):
         self.add_item(discord.ui.Button(label="📜 View History", style=discord.ButtonStyle.blurple, custom_id="history", row=1))
         self.add_item(discord.ui.Button(label="🔄 Refresh Menu", style=discord.ButtonStyle.gray, custom_id="refresh", row=1))
 
+# --- Payment Menu ---
+class PaymentMenu(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(label="💰 Buy Access", url="https://example.com/buy", style=discord.ButtonStyle.link))
+
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     """Handle button interactions and ensure role-based access dynamically."""
@@ -72,54 +78,31 @@ async def on_interaction(interaction: discord.Interaction):
     member = guild.get_member(user.id) if guild else None
     has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles) if member else False
 
+    # ✅ Immediate defer response to prevent timeout
+    await interaction.response.defer(ephemeral=True)
+
     if interaction.data["custom_id"] == "get_access":
-        await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
+        await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu())
         return
 
     if interaction.data["custom_id"] == "login":
         if has_access:
-          await interaction.response.edit_message(view=FullFunctionMenu())  # ✅ Show all functions instead of replying
+            await interaction.followup.edit_message(view=FullFunctionMenu())  # ✅ Show full function menu
         else:
-            await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
+            await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu())
         return
 
-    if interaction.data["custom_id"] in ["text_gen", "image_gen"]:
+    if interaction.data["custom_id"] in ["video_text", "video_image", "history", "refresh"]:
         if not has_access:
-            await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
-            return
-
-        # ✅ **Fix: Defer interaction first to prevent timeout**
-        await interaction.response.defer(ephemeral=True)
-
-        # 🔹 Ask for a prompt from the user
-        await interaction.followup.send("📝 Please enter your prompt:", ephemeral=True)
-
-        def check(msg):
-            return msg.author == user and msg.channel == interaction.channel
-
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=60)  # Wait for 60 seconds
-            prompt = msg.content
-            await msg.delete()  # ✅ Delete user's message after receiving
-        except asyncio.TimeoutError:
-            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
+            await interaction.followup.send("🔒 You need access!", view=PaymentMenu())
             return
 
         # 🔹 Simulate processing
-        await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-        await asyncio.sleep(5)  # Simulate video generation
+        await interaction.followup.send("⏳ Processing your request...", ephemeral=True)
+        await asyncio.sleep(2)  # Simulate processing
 
-        # 🔹 Generate a fake video URL (Replace with real API)
-        url = f"https://example.com/video/{user.id}"
-        save_video(user.id, url)
-        update_credits(user.id, 20)
-
-        # 🔹 Send video link in DM
-        try:
-            await user.send(f"🎥 Your video is ready! Click here: {url}")
-            await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
-        except discord.Forbidden:
-            await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
+        # 🔹 Example response
+        await interaction.followup.send("✅ Action completed!", ephemeral=True)
 
 @bot.event
 async def setup_menu(channel):
