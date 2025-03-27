@@ -78,23 +78,26 @@ async def on_interaction(interaction: discord.Interaction):
     member = guild.get_member(user.id) if guild else None
     has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles) if member else False
 
-    # ✅ Immediate defer response to prevent timeout
-    await interaction.response.defer(ephemeral=True)
+    # ✅ Defer the response immediately to prevent timeouts
+    await interaction.response.defer()
 
     if interaction.data["custom_id"] == "get_access":
-        await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu())
+        await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
     if interaction.data["custom_id"] == "login":
         if has_access:
-            await interaction.followup.edit_message(view=FullFunctionMenu())  # ✅ Show full function menu
+            try:
+                await interaction.message.edit(view=FullFunctionMenu())  # ✅ Correct way to update the message
+            except discord.Forbidden:
+                await interaction.followup.send("⚠️ I don't have permission to edit this message!", ephemeral=True)
         else:
-            await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu())
+            await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
     if interaction.data["custom_id"] in ["video_text", "video_image", "history", "refresh"]:
         if not has_access:
-            await interaction.followup.send("🔒 You need access!", view=PaymentMenu())
+            await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
 
         # 🔹 Simulate processing
@@ -103,6 +106,7 @@ async def on_interaction(interaction: discord.Interaction):
 
         # 🔹 Example response
         await interaction.followup.send("✅ Action completed!", ephemeral=True)
+
 
 @bot.event
 async def setup_menu(channel):
