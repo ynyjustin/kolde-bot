@@ -69,12 +69,7 @@ async def on_interaction(interaction: discord.Interaction):
     user = interaction.user
     guild = interaction.guild
     member = guild.get_member(user.id) if guild else None
-
-    if not member:
-        await interaction.response.send_message("❌ Error: Could not retrieve user info.", ephemeral=True)
-        return
-
-    has_access = user_has_access(member)
+    has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles) if member else False
 
     if interaction.data["custom_id"] == "get_access":
         await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
@@ -82,27 +77,16 @@ async def on_interaction(interaction: discord.Interaction):
 
     if interaction.data["custom_id"] == "login":
         if has_access:
-            await interaction.response.send_message("✅ Access granted! Here are your functions:", view=FullFunctionMenu(), ephemeral=True)
+            await interaction.response.send_message("✅ You already have access!", ephemeral=True)
         else:
             await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
-        return
-
-    if interaction.data["custom_id"] == "history":
-        history = get_video_history(user.id)
-        history_text = "\n".join([f"📅 {date}: [Watch Video]({url})" for url, date in history]) if history else "❌ No videos found."
-        embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.gold())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    if interaction.data["custom_id"] == "refresh":
-        await interaction.response.edit_message(content="✅ Menu refreshed!", view=FullFunctionMenu())
         return
 
     if interaction.data["custom_id"] == "video_text":
         if not has_access:
             await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
-
+        
         await interaction.response.defer(ephemeral=True)
         await interaction.followup.send("📝 Please enter your text prompt:", ephemeral=True)
 
@@ -112,61 +96,74 @@ async def on_interaction(interaction: discord.Interaction):
         try:
             msg = await bot.wait_for("message", check=check, timeout=60)
             prompt = msg.content
-            await msg.delete()
+            await msg.delete()  # ✅ Delete user's text input
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
 
+        # 🔹 Simulate video generation
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
 
+        # 🔹 Fake video URL (Replace with real API)
         url = f"https://example.com/video/{user.id}"
+        save_video(user.id, url)
+        update_credits(user.id, 20)
 
+        # 🔹 Send video link in DM
         try:
             await user.send(f"🎥 Your video is ready! Click here: {url}")
             await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
         except discord.Forbidden:
-            await interaction.followup.send("⚠️ I couldn't DM you! Enable DMs and try again.", ephemeral=True)
+            await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
 
-    if interaction.data["custom_id"] == "video_image":
+    if interaction.data["custom_id"] == "video_image_text":
         if not has_access:
             await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
-
+        
         await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send("📸 Please upload an image:", ephemeral=True)
+        await interaction.followup.send("📷 Please upload an image for your video:", ephemeral=True)
 
         def image_check(msg):
             return msg.author == user and msg.channel == interaction.channel and msg.attachments
 
         try:
-            image_msg = await bot.wait_for("message", check=image_check, timeout=60)
-            image_url = image_msg.attachments[0].url
-            await image_msg.delete()
+            img_msg = await bot.wait_for("message", check=image_check, timeout=60)
+            image_url = img_msg.attachments[0].url
+            await img_msg.delete()  # ✅ Delete image upload
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
 
-        await interaction.followup.send("📝 Image received! Now enter a text prompt:", ephemeral=True)
+        await interaction.followup.send("📝 Now enter your text prompt for the video:", ephemeral=True)
+
+        def text_check(msg):
+            return msg.author == user and msg.channel == interaction.channel
 
         try:
-            text_msg = await bot.wait_for("message", check=check, timeout=60)
-            prompt = text_msg.content
-            await text_msg.delete()
+            text_msg = await bot.wait_for("message", check=text_check, timeout=60)
+            text_prompt = text_msg.content
+            await text_msg.delete()  # ✅ Delete text prompt after receiving
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
 
+        # 🔹 Simulate video generation
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
 
+        # 🔹 Fake video URL (Replace with real API)
         url = f"https://example.com/video/{user.id}"
+        save_video(user.id, url)
+        update_credits(user.id, 20)
 
+        # 🔹 Send video link in DM
         try:
             await user.send(f"🎥 Your video is ready! Click here: {url}")
             await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
         except discord.Forbidden:
-            await interaction.followup.send("⚠️ I couldn't DM you! Enable DMs and try again.", ephemeral=True)
+            await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
 
 @bot.event
 async def setup_menu(channel):
