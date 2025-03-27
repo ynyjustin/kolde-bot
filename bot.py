@@ -75,12 +75,12 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
-    if interaction.data["custom_id"] == "login":
-        if has_access:
-            await interaction.response.send_message("✅ You already have access!", ephemeral=True)
-        else:
-            await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
-        return
+if interaction.data["custom_id"] == "login":
+    if has_access:
+        await interaction.response.edit_message(view=FullAccessMenu())
+    else:
+        await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
+    return
 
     if interaction.data["custom_id"] == "video_text":
         if not has_access:
