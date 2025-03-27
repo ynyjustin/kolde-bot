@@ -35,26 +35,11 @@ def init_db():
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- Helpers ---
 def user_has_access(member):
     """Check if a user has the required role for access."""
     return any(role.id == ACCESS_ROLE_ID for role in member.roles)
 
-async def setup_menu(channel):
-    embed = discord.Embed(
-        title="🎬 Welcome to Kolde AI Video Generator",
-        description=(
-            "Generate high-quality AI videos using text or image + prompt.\n"
-            "**Each generation costs 20 credits**. New users get 100 credits for free!\n\n"
-            "💡 *Tips for prompts:* Use specific descriptions, mention style, mood, and action.\n"
-            "🛍️ You can buy credits using the red button below.\n"
-            "📜 Use the buttons below to interact with the bot."
-        ),
-        color=discord.Color.dark_blue()
-    )
-    await channel.send(embed=embed, view=MainMenu())
-
-# --- Main Button View ---
+# --- Main Menu ---
 class MainMenu(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -64,6 +49,16 @@ class MainMenu(discord.ui.View):
         self.add_item(discord.ui.Button(label="📘 Help", url="https://docs.example.com", style=discord.ButtonStyle.link, row=1))
         self.add_item(discord.ui.Button(label="📄 Prompt Guide", url="https://example.com/prompt-guide", style=discord.ButtonStyle.link, row=1))
         self.add_item(discord.ui.Button(label="🔔 Updates", url="https://example.com/updates", style=discord.ButtonStyle.link, row=1))
+
+# --- Full Function Menu ---
+class FullFunctionMenu(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(label="🖋️ Text Generation", style=discord.ButtonStyle.green, custom_id="text_gen", row=0))
+        self.add_item(discord.ui.Button(label="🖼️ Image Generation", style=discord.ButtonStyle.green, custom_id="image_gen", row=0))
+
+        self.add_item(discord.ui.Button(label="📜 View History", style=discord.ButtonStyle.blurple, custom_id="history", row=1))
+        self.add_item(discord.ui.Button(label="🔄 Refresh Menu", style=discord.ButtonStyle.gray, custom_id="refresh", row=1))
 
 # --- Events ---
 @bot.event
@@ -85,7 +80,7 @@ async def on_interaction(interaction: discord.Interaction):
 
     if interaction.data["custom_id"] == "login":
         if has_access:
-            await interaction.response.send_message("✅ You already have access!", ephemeral=True)
+            await interaction.response.send_message("✅ Access granted! Here are your functions:", view=FullFunctionMenu(), ephemeral=True)
         else:
             await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
@@ -94,7 +89,7 @@ async def on_interaction(interaction: discord.Interaction):
         if not has_access:
             await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
-        
+
         await interaction.response.defer(ephemeral=True)
 
         # 🔹 Ask for a prompt from the user
@@ -104,7 +99,7 @@ async def on_interaction(interaction: discord.Interaction):
             return msg.author == user and msg.channel == interaction.channel
 
         try:
-            msg = await bot.wait_for("message", check=check, timeout=60)  
+            msg = await bot.wait_for("message", check=check, timeout=60)
             prompt = msg.content
             await msg.delete()  # ✅ Delete user's message after receiving
         except asyncio.TimeoutError:
@@ -112,10 +107,10 @@ async def on_interaction(interaction: discord.Interaction):
             return
 
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-        await asyncio.sleep(5)  
+        await asyncio.sleep(5)
 
         url = f"https://example.com/video/{user.id}"
-        
+
         try:
             await user.send(f"🎥 Your video is ready! Click here: {url}")
             await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
@@ -138,7 +133,22 @@ class PaymentMenu(discord.ui.View):
         self.add_item(discord.ui.Button(label="💳 Pay with Stripe", url="https://stripe.com", style=discord.ButtonStyle.blurple))
         self.add_item(discord.ui.Button(label="✅ Confirm Payment", style=discord.ButtonStyle.green, custom_id="confirm_payment"))
 
-# Optional: Refresh menu manually
+# --- Setup Menu ---
+async def setup_menu(channel):
+    embed = discord.Embed(
+        title="🎬 Welcome to Kolde AI Video Generator",
+        description=(
+            "Generate high-quality AI videos using text or image + prompt.\n"
+            "**Each generation costs 20 credits**. New users get 100 credits for free!\n\n"
+            "💡 *Tips for prompts:* Use specific descriptions, mention style, mood, and action.\n"
+            "🛍️ You can buy credits using the red button below.\n"
+            "📜 Use the buttons below to interact with the bot."
+        ),
+        color=discord.Color.dark_blue()
+    )
+    await channel.send(embed=embed, view=MainMenu())
+
+# --- Refresh Menu ---
 @bot.command()
 async def menu(ctx):
     if ctx.channel.id == CHANNEL_ID:
