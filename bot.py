@@ -37,17 +37,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # --- Helpers ---
 def user_has_access(member):
+    """Check if a user has the required role for access."""
     return any(role.id == ACCESS_ROLE_ID for role in member.roles)
-
-async def ensure_menu_pinned():
-    channel = bot.get_channel(CHANNEL_ID)
-    if not channel:
-        print("❌ ERROR: Channel not found!")
-        return
-    async for message in channel.history(limit=10):
-        if message.author == bot.user and message.embeds:
-            return
-    await setup_menu(channel)
 
 async def setup_menu(channel):
     embed = discord.Embed(
@@ -67,12 +58,9 @@ async def setup_menu(channel):
 class MainMenu(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
-
-        # First row - Login and Get Access buttons
         self.add_item(discord.ui.Button(label="🔓 Login", style=discord.ButtonStyle.blurple, custom_id="login", row=0))
         self.add_item(discord.ui.Button(label="🔒 Get Access", style=discord.ButtonStyle.red, custom_id="get_access", row=0))
 
-        # Second row - Help & Guides
         self.add_item(discord.ui.Button(label="📘 Help", url="https://docs.example.com", style=discord.ButtonStyle.link, row=1))
         self.add_item(discord.ui.Button(label="📄 Prompt Guide", url="https://example.com/prompt-guide", style=discord.ButtonStyle.link, row=1))
         self.add_item(discord.ui.Button(label="🔔 Updates", url="https://example.com/updates", style=discord.ButtonStyle.link, row=1))
@@ -138,7 +126,9 @@ async def on_interaction(interaction: discord.Interaction):
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
     init_db()
-    await ensure_menu_pinned()
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel:
+        await setup_menu(channel)
 
 # --- Payment Menu ---
 class PaymentMenu(discord.ui.View):
