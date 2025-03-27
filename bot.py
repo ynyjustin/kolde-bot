@@ -78,7 +78,7 @@ async def on_interaction(interaction: discord.Interaction):
 
     if interaction.data["custom_id"] == "login":
         if has_access:
-            await interaction.response.edit_message(view=FullAccessMenu())  # ✅ Show all functions instead of replying
+          await interaction.response.edit_message(view=FullFunctionMenu())  # ✅ Show all functions instead of replying
         else:
             await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
