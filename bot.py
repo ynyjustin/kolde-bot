@@ -169,11 +169,29 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("⚠️ I couldn't DM you! Enable DMs and try again.", ephemeral=True)
 
 @bot.event
+async def setup_menu(channel):
+    embed = discord.Embed(
+        title="🎬 Welcome to Kolde AI Video Generator",
+        description=(
+            "Generate AI-powered videos using text or image + prompt.\n"
+            "**Each generation costs 20 credits**. New users get 100 credits for free!\n\n"
+            "💡 *Tips for prompts:* Be specific, include style, mood, and action.\n"
+            "🛍️ Buy credits using the red button below.\n"
+            "📜 Use the buttons below to interact with the bot."
+        ),
+        color=discord.Color.dark_blue()
+    )
+    await channel.send(embed=embed, view=MainMenu())
+
+@bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
     init_db()
+    
     channel = bot.get_channel(CHANNEL_ID)
     if channel:
         await setup_menu(channel)
+    else:
+        print("❌ ERROR: Channel not found!")
 
 bot.run(TOKEN)
