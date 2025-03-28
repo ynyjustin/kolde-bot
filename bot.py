@@ -274,6 +274,17 @@ async def setup_menu(channel):
         color=discord.Color.dark_blue()
     )
     await channel.send(embed=embed, view=MainMenu())
+    
+async def keep_alive():
+    while True:
+        print("✅ Bot is running... (Keep-alive)")
+        await asyncio.sleep(600)  # Keep active every 10 minutes
+
+@bot.event
+async def on_ready():
+    print(f"✅ Logged in as {bot.user}")
+    init_db()
+    bot.loop.create_task(keep_alive())  # Keep bot active
 
 @bot.event
 async def on_ready():
