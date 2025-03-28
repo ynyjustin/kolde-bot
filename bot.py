@@ -100,7 +100,7 @@ async def on_interaction(interaction: discord.Interaction):
 
     await interaction.response.defer()
 
-   if interaction.data["custom_id"] == "get_access":
+       if interaction.data["custom_id"] == "get_access":
     user_id = interaction.user.id  # Get Discord user ID
     session_url = create_checkout_session(user_id)
 
