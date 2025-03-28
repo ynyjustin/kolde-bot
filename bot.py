@@ -283,4 +283,4 @@ async def on_ready():
     if channel:
         await setup_menu(channel)
 
-bot
+bot.run(TOKEN)
