@@ -11,14 +11,15 @@ from dotenv import load_dotenv
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
-CHANNEL_ID = 1227704136552939551  
-ACCESS_ROLE_ID = 1227708209356345454  
+CHANNEL_ID = 1227704136552939551
+ACCESS_ROLE_ID = 1227708209356345454
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 
 if not TOKEN or not RUNWAY_API_KEY:
     print("❌ ERROR: Missing bot token or API key!")
     exit(1)
 
+stripe.api_key = STRIPE_SECRET_KEY
 DB_FILE = "credits.db"
 
 def create_checkout_session(user_id):
@@ -31,7 +32,7 @@ def create_checkout_session(user_id):
             "price_data": {
                 "currency": "euro",
                 "product_data": {"name": "Kolde AI Access"},
-                "unit_amount": 299,  # €2.99 (amount in cents)
+                "unit_amount": 299,
             },
             "quantity": 1,
         }],
@@ -69,18 +70,16 @@ class MainMenu(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="🔓 Login", style=discord.ButtonStyle.blurple, custom_id="login"))
         self.add_item(discord.ui.Button(label="🔒 Get Access", style=discord.ButtonStyle.red, custom_id="get_access"))
-
         self.add_item(discord.ui.Button(label="📘 Help", url="https://docs.example.com", style=discord.ButtonStyle.link))
         self.add_item(discord.ui.Button(label="📄 Prompt Guide", url="https://example.com/prompt-guide", style=discord.ButtonStyle.link))
         self.add_item(discord.ui.Button(label="🔔 Updates", url="https://example.com/updates", style=discord.ButtonStyle.link))
 
-# --- Full Function Menu (Only visible to user) ---
+# --- Full Function Menu ---
 class FullFunctionMenu(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="🎥 Video by Text Prompt", style=discord.ButtonStyle.green, custom_id="video_text"))
         self.add_item(discord.ui.Button(label="🖼️ Video by Image + Text", style=discord.ButtonStyle.green, custom_id="video_image"))
-
         self.add_item(discord.ui.Button(label="📜 View History", style=discord.ButtonStyle.blurple, custom_id="history"))
         self.add_item(discord.ui.Button(label="🔄 Refresh Menu", style=discord.ButtonStyle.gray, custom_id="refresh"))
 
@@ -92,7 +91,6 @@ class PaymentMenu(discord.ui.View):
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
-    """Handle button interactions and ensure role-based access dynamically."""
     user = interaction.user
     guild = interaction.guild
     member = guild.get_member(user.id) if guild else None
@@ -100,22 +98,22 @@ async def on_interaction(interaction: discord.Interaction):
 
     await interaction.response.defer()
 
-       if interaction.data["custom_id"] == "get_access":
-    user_id = interaction.user.id  # Get Discord user ID
-    session_url = create_checkout_session(user_id)
+    if interaction.data["custom_id"] == "get_access":
+        user_id = interaction.user.id
+        session_url = create_checkout_session(user_id)
 
-    await interaction.followup.send(
-        "🔒 You need access! Click below to purchase:",
-        view=discord.ui.View().add_item(
-            discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
-        ),
-        ephemeral=True
-    )
-    return
+        await interaction.followup.send(
+            "🔒 You need access! Click below to purchase:",
+            view=discord.ui.View().add_item(
+                discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
+            ),
+            ephemeral=True
+        )
+        return
 
     if interaction.data["custom_id"] == "login":
         if has_access:
-            await interaction.followup.send("✅ You now have access to all functions!", view=FullFunctionMenu(), ephemeral=True)  
+            await interaction.followup.send("✅ You now have access to all functions!", view=FullFunctionMenu(), ephemeral=True)
         else:
             await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
@@ -132,7 +130,7 @@ async def on_interaction(interaction: discord.Interaction):
             return msg.author == user and msg.channel == interaction.channel
 
         try:
-            msg = await bot.wait_for("message", check=check, timeout=60)  
+            msg = await bot.wait_for("message", check=check, timeout=60)
             prompt = msg.content
             image_url = None
 
@@ -143,14 +141,14 @@ async def on_interaction(interaction: discord.Interaction):
                     await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
                     return
 
-            await msg.delete()  
+            await msg.delete()
 
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
 
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-        await asyncio.sleep(5)  
+        await asyncio.sleep(5)
 
         url = f"https://example.com/video/{user.id}"
         save_video(user.id, url)
@@ -173,7 +171,7 @@ async def on_interaction(interaction: discord.Interaction):
         else:
             history_text = "\n".join([f"📹 {video}" for video in history])
             embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
-            await interaction.followup.send(embed=embed, ephemeral=True)  # ✅ Now only the user sees this in the channel
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
 def save_video(user_id, url):
     conn = sqlite3.connect(DB_FILE)
@@ -190,7 +188,6 @@ def fetch_video_history(user_id):
     conn.close()
     return history
 
-@bot.event
 async def setup_menu(channel):
     embed = discord.Embed(
         title="🎬 Welcome to Kolde AI Video Generator",
