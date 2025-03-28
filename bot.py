@@ -30,9 +30,9 @@ def create_checkout_session(user_id):
         cancel_url="https://kolde-bot.onrender.com/cancel",
         line_items=[{
             "price_data": {
-                "currency": "euro",
+                "currency": "eur",  # ✅ Correct currency code
                 "product_data": {"name": "Kolde AI Access"},
-                "unit_amount": 299,
+                "unit_amount": 299,  # Amount in cents (€2.99)
             },
             "quantity": 1,
         }],
