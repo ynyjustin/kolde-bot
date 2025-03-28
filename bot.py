@@ -100,15 +100,18 @@ async def on_interaction(interaction: discord.Interaction):
 
     await interaction.response.defer()
 
-    if interaction.data["custom_id"] == "get_access":
+   if interaction.data["custom_id"] == "get_access":
     user_id = interaction.user.id  # Get Discord user ID
-    session_url = create_checkout_session(user_id)  # Generate payment link
+    session_url = create_checkout_session(user_id)
 
     await interaction.followup.send(
         "🔒 You need access! Click below to purchase:",
-        view=discord.ui.View().add_item(discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)),
+        view=discord.ui.View().add_item(
+            discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
+        ),
         ephemeral=True
     )
+    return
 
     if interaction.data["custom_id"] == "login":
         if has_access:
