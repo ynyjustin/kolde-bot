@@ -294,4 +294,13 @@ async def on_ready():
     if channel:
         await setup_menu(channel)
 
+@bot.event
+async def on_disconnect():
+    print("🔴 Bot disconnected! Reconnecting...")
+    await asyncio.sleep(5)  # Wait 5 seconds before trying to reconnect
+
+@bot.event
+async def on_resumed():
+    print("🔄 Reconnected successfully!")
+
 bot.run(TOKEN)
