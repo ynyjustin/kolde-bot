@@ -22,6 +22,10 @@ if not TOKEN or not RUNWAY_API_KEY:
 stripe.api_key = STRIPE_SECRET_KEY
 DB_FILE = "credits.db"
 
+CREDIT_COST = 0.4
+MIN_CREDITS = 5
+
+
 def create_checkout_session(user_id):
     session = stripe.checkout.Session.create(
         payment_method_types=["card"],
@@ -30,15 +34,37 @@ def create_checkout_session(user_id):
         cancel_url="https://kolde-bot.onrender.com/cancel",
         line_items=[{
             "price_data": {
-                "currency": "eur",  # ✅ Correct currency code
+                "currency": "eur",
                 "product_data": {"name": "Kolde AI Access"},
-                "unit_amount": 299,  # Amount in cents (€2.99)
+                "unit_amount": 299,
             },
             "quantity": 1,
         }],
-        metadata={"user_id": user_id}
+        metadata={"user_id": user_id, "type": "access"}
     )
     return session.url
+
+
+def create_credit_purchase_session(user_id, amount):
+    quantity = max(amount, MIN_CREDITS)
+    unit_amount = int(CREDIT_COST * 100)  # cents
+    session = stripe.checkout.Session.create(
+        payment_method_types=["card"],
+        mode="payment",
+        success_url="https://kolde-bot.onrender.com/success?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url="https://kolde-bot.onrender.com/cancel",
+        line_items=[{
+            "price_data": {
+                "currency": "eur",
+                "product_data": {"name": f"{quantity} Kolde Credits"},
+                "unit_amount": unit_amount,
+            },
+            "quantity": quantity,
+        }],
+        metadata={"user_id": user_id, "type": "credits", "credit_amount": quantity}
+    )
+    return session.url
+
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -46,7 +72,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_credits (
             user_id INTEGER PRIMARY KEY,
-            credits INTEGER DEFAULT 100
+            credits INTEGER DEFAULT 0
         )
     """)
     cursor.execute("""
@@ -58,6 +84,24 @@ def init_db():
     """)
     conn.commit()
     conn.close()
+
+
+def get_credits(user_id):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT credits FROM user_credits WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+
+def add_credits(user_id, amount):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO user_credits (user_id, credits) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET credits = credits + ?", (user_id, amount, amount))
+    conn.commit()
+    conn.close()
+
 
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
@@ -81,6 +125,8 @@ class FullFunctionMenu(discord.ui.View):
         self.add_item(discord.ui.Button(label="🎥 Video by Text Prompt", style=discord.ButtonStyle.green, custom_id="video_text"))
         self.add_item(discord.ui.Button(label="🖼️ Video by Image + Text", style=discord.ButtonStyle.green, custom_id="video_image"))
         self.add_item(discord.ui.Button(label="📜 View History", style=discord.ButtonStyle.blurple, custom_id="history"))
+        self.add_item(discord.ui.Button(label="💳 Buy Credits", style=discord.ButtonStyle.green, custom_id="buy_credits"))
+        self.add_item(discord.ui.Button(label="💼 Check Credits", style=discord.ButtonStyle.gray, custom_id="check_credits"))
         self.add_item(discord.ui.Button(label="🔄 Refresh Menu", style=discord.ButtonStyle.gray, custom_id="refresh"))
 
 # --- Payment Menu ---
@@ -99,14 +145,10 @@ async def on_interaction(interaction: discord.Interaction):
     await interaction.response.defer()
 
     if interaction.data["custom_id"] == "get_access":
-        user_id = interaction.user.id
-        session_url = create_checkout_session(user_id)
-
+        session_url = create_checkout_session(user.id)
         await interaction.followup.send(
             "🔒 You need access! Click below to purchase:",
-            view=discord.ui.View().add_item(
-                discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
-            ),
+            view=discord.ui.View().add_item(discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)),
             ephemeral=True
         )
         return
@@ -118,9 +160,40 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
+    if interaction.data["custom_id"] == "check_credits":
+        credits = get_credits(user.id)
+        await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
+        return
+
+    if interaction.data["custom_id"] == "buy_credits":
+        await interaction.followup.send("💰 Enter how many credits you want to buy (min 5):", ephemeral=True)
+
+        def check(m):
+            return m.author.id == user.id and m.channel == interaction.channel
+
+        try:
+            msg = await bot.wait_for("message", timeout=30.0, check=check)
+            quantity = int(msg.content)
+            if quantity < MIN_CREDITS:
+                await interaction.followup.send("❌ Minimum is 5 credits.", ephemeral=True)
+                return
+
+            session_url = create_credit_purchase_session(user.id, quantity)
+            await interaction.followup.send("Click below to purchase your credits:",
+                                           view=discord.ui.View().add_item(discord.ui.Button(label="💳 Buy Now", url=session_url)),
+                                           ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send("❌ Invalid input or timeout.", ephemeral=True)
+
     if interaction.data["custom_id"] in ["video_text", "video_image"]:
         if not has_access:
             await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
+            return
+
+        required_credits = 2 if interaction.data["custom_id"] == "video_image" else 1
+        credits = get_credits(user.id)
+        if credits < required_credits:
+            await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
             return
 
         prompt_request = "📝 Please enter your prompt:" if interaction.data["custom_id"] == "video_text" else "🖼️ Upload an image and enter a prompt:"
@@ -146,6 +219,12 @@ async def on_interaction(interaction: discord.Interaction):
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
+
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE user_credits SET credits = credits - ? WHERE user_id = ?", (required_credits, user.id))
+        conn.commit()
+        conn.close()
 
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
@@ -204,4 +283,4 @@ async def on_ready():
     if channel:
         await setup_menu(channel)
 
-bot.run(TOKEN)
+bot
