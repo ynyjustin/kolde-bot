@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands
 import sqlite3
 import asyncio
+import stripe
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -12,6 +13,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
 CHANNEL_ID = 1227704136552939551  
 ACCESS_ROLE_ID = 1227708209356345454  
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 if not TOKEN or not RUNWAY_API_KEY:
     print("❌ ERROR: Missing bot token or API key!")
