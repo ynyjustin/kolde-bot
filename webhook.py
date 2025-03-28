@@ -1,48 +1,58 @@
 from flask import Flask, request, jsonify
-import sqlite3
+import stripe
 import os
 import discord
 import asyncio
 
 app = Flask(__name__)
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-ROLE_ID = 1227708209356345454
 
-intents = discord.Intents.all()
+# Load environment variables
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+
+stripe.api_key = STRIPE_SECRET_KEY
+
+# Discord Bot Setup
+intents = discord.Intents.default()
 bot = discord.Client(intents=intents)
 
-@app.route("/")
-def home():
-    return "Kolde AI Webhook is live!"
+ACCESS_ROLE_ID = 1227708209356345454  # Replace with your Discord role ID
+GUILD_ID = 1227704136552939551  # Replace with your Discord server ID
 
-@app.route("/sellfy", methods=["POST"])
-def handle_sellfy():
-    data = request.json
-    discord_tag = data.get("custom_field")  # Like "User#1234"
-    print(f"Received order for: {discord_tag}")
+@bot.event
+async def on_ready():
+    print(f"✅ Bot is online as {bot.user}")
 
-    async def assign_role():
-        await bot.wait_until_ready()
-        for guild in bot.guilds:
-            for member in guild.members:
-                if str(member) == discord_tag:
-                    role = guild.get_role(ROLE_ID)
-                    if role:
-                        await member.add_roles(role)
-                        add_credits(member.id, 100)
-                        try:
-                            await member.send("✅ Thanks for purchasing Kolde AI! You’ve been given access + 100 credits.")
-                        except:
-                            pass
-                        return
+@app.route('/stripe-webhook', methods=['POST'])
+def stripe_webhook():
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get('Stripe-Signature')
 
-    asyncio.ensure_future(assign_role())
-    return jsonify({"status": "ok"})
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except stripe.error.SignatureVerificationError:
+        return "Webhook signature verification failed", 400
 
-def add_credits(user_id, amount):
-    conn = sqlite3.connect("credits.db")
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR IGNORE INTO user_credits (user_id, credits) VALUES (?, ?)", (user_id, 0))
-    cursor.execute("UPDATE user_credits SET credits = credits + ? WHERE user_id = ?", (amount, user_id))
-    conn.commit()
-    conn.close()
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        user_id = int(session['metadata']['user_id'])
+
+        asyncio.run_coroutine_threadsafe(grant_access(user_id), bot.loop)
+
+    return jsonify(success=True)
+
+async def grant_access(user_id):
+    """Grants the Discord role to the user after payment."""
+    guild = bot.get_guild(GUILD_ID)
+    if guild:
+        member = guild.get_member(user_id)
+        if member:
+            role = guild.get_role(ACCESS_ROLE_ID)
+            if role:
+                await member.add_roles(role)
+                print(f"✅ Granted access role to {member.name}")
+
+if __name__ == '__main__':
+    bot.loop.create_task(bot.start(DISCORD_TOKEN))  # Start Discord bot in async loop
+    app.run(host="0.0.0.0", port=10000)  # Make sure it runs on Render
