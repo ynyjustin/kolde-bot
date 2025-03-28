@@ -13,13 +13,31 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
 CHANNEL_ID = 1227704136552939551  
 ACCESS_ROLE_ID = 1227708209356345454  
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 
 if not TOKEN or not RUNWAY_API_KEY:
     print("❌ ERROR: Missing bot token or API key!")
     exit(1)
 
 DB_FILE = "credits.db"
+
+def create_checkout_session(user_id):
+    session = stripe.checkout.Session.create(
+        payment_method_types=["card"],
+        mode="payment",
+        success_url="https://kolde-bot.onrender.com/success?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url="https://kolde-bot.onrender.com/cancel",
+        line_items=[{
+            "price_data": {
+                "currency": "euro",
+                "product_data": {"name": "Kolde AI Access"},
+                "unit_amount": 299,  # €2.99 (amount in cents)
+            },
+            "quantity": 1,
+        }],
+        metadata={"user_id": user_id}
+    )
+    return session.url
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -83,8 +101,14 @@ async def on_interaction(interaction: discord.Interaction):
     await interaction.response.defer()
 
     if interaction.data["custom_id"] == "get_access":
-        await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
-        return
+    user_id = interaction.user.id  # Get Discord user ID
+    session_url = create_checkout_session(user_id)  # Generate payment link
+
+    await interaction.followup.send(
+        "🔒 You need access! Click below to purchase:",
+        view=discord.ui.View().add_item(discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)),
+        ephemeral=True
+    )
 
     if interaction.data["custom_id"] == "login":
         if has_access:
