@@ -186,7 +186,7 @@ async def on_interaction(interaction: discord.Interaction):
         except Exception as e:
             await interaction.followup.send("❌ Invalid input or timeout.", ephemeral=True)
 
-       if interaction.data["custom_id"] in ["video_text", "video_image"]:
+    if interaction.data["custom_id"] in ["video_text", "video_image"]:
         if not has_access:
             await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
