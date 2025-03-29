@@ -212,6 +212,7 @@ async def on_interaction(interaction: discord.Interaction):
             )
         except Exception:
             await interaction.followup.send("❌ Invalid input or timeout.", ephemeral=True)
+        return
 
     if custom_id in ["video_text", "video_image"]:
         if not has_access:
@@ -233,26 +234,22 @@ async def on_interaction(interaction: discord.Interaction):
         return
 
     if custom_id.startswith("ratio_"):
-    parts = custom_id.split("_")  # Example: ["ratio", "16", "9", "video_text"]
+        parts = custom_id.split("_")  # Example: ["ratio", "16", "9", "video_text"]
 
-    if len(parts) < 4:
-        await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
-        return
-
-    ratio = f"{parts[1]}_{parts[2]}"  # Example: "16_9"
-    video_type = parts[3]  # Should be "video_text" or "video_image"
-
-    print(f"Ratio selected: {ratio}, Video Type: {video_type}")  # Debugging
-
-    if video_type not in ["video_text", "video_image"]:
-        await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
-        return
-
-    prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
-    await interaction.followup.send(prompt_request, ephemeral=True)
-
+        if len(parts) < 4:
+            await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
             return
 
+        ratio = f"{parts[1]}_{parts[2]}"  # Example: "16_9"
+        video_type = parts[3]  # Should be "video_text" or "video_image"
+
+        print(f"Ratio selected: {ratio}, Video Type: {video_type}")  # Debugging
+
+        if video_type not in ["video_text", "video_image"]:
+            await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
+            return
+
+        prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
         await interaction.followup.send(prompt_request, ephemeral=True)
 
         def check(msg):
