@@ -114,9 +114,7 @@ class MainMenu(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="🔓 Login", style=discord.ButtonStyle.blurple, custom_id="login"))
         self.add_item(discord.ui.Button(label="🔒 Get Access", style=discord.ButtonStyle.red, custom_id="get_access"))
-        self.add_item(discord.ui.Button(label="📘 Help", url="https://docs.example.com", style=discord.ButtonStyle.link))
         self.add_item(discord.ui.Button(label="📄 Prompt Guide", url="https://example.com/prompt-guide", style=discord.ButtonStyle.link))
-        self.add_item(discord.ui.Button(label="🔔 Updates", url="https://example.com/updates", style=discord.ButtonStyle.link))
 
 # --- Full Function Menu ---
 class FullFunctionMenu(discord.ui.View):
@@ -214,34 +212,39 @@ async def on_interaction(interaction: discord.Interaction):
         menu.message = message
         return
 
-    # Handle aspect ratio selection
-    if interaction.data["custom_id"].startswith("ratio_"):
-        ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
-        video_type = "video_text" if "text" in interaction.data else "video_image"
+   # Handle aspect ratio selection
+if interaction.data["custom_id"].startswith("ratio_"):
+    ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
+    video_type = "video_text" if "text" in interaction.data["custom_id"] else "video_image"
 
-        prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
-        await interaction.followup.send(prompt_request, ephemeral=True)
+    if video_type == "video_text":
+        prompt_request = "📝 Please enter your text prompt:"
+    else:  # video_image
+        prompt_request = "🖼️ Upload an image and enter a text prompt:"
 
-        def check(msg):
-            return msg.author == user and msg.channel == interaction.channel
+    await interaction.followup.send(prompt_request, ephemeral=True)
 
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=60)
-            prompt = msg.content
-            image_url = None
+    def check(msg):
+        return msg.author == user and msg.channel == interaction.channel
 
-            if video_type == "video_image":
-                if msg.attachments:
-                    image_url = msg.attachments[0].url
-                else:
-                    await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
-                    return
+    try:
+        msg = await bot.wait_for("message", check=check, timeout=60)
+        prompt = msg.content
+        image_url = None
 
-            await msg.delete()
+        # Only for video_image, check if an image is attached
+        if video_type == "video_image":
+            if msg.attachments:
+                image_url = msg.attachments[0].url
+            else:
+                await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
+                return
 
-        except asyncio.TimeoutError:
-            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
-            return
+        await msg.delete()
+
+    except asyncio.TimeoutError:
+        await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
+        return
 
         # Deduct credits
         conn = sqlite3.connect(DB_FILE)
@@ -295,13 +298,15 @@ async def setup_menu(channel):
     embed = discord.Embed(
         title="🎬 Kolde AI",
         description=(
-"Kolde AI este primul serviciu romanesc prin care puteti genera videoclip-uri AI!"
+"Kolde AI este primul serviciu romanesc prin care puteti genera videoclip-uri AI!\n"
         "**Functii:**\n"
-         "📝 **Video by text prompt-genereaza videoclip-uri folosind o descriere:** 1 credit\n"
-         "🖼️ **Video by Image+Text-genereaza videoclip-uri prin intermediul unei imagini+descriere:** 2 credite\n\n"
+         "📝 **Video by text prompt:genereaza videoclip-uri folosind o descriere**\n"
+         "🖼️ **Video by Image+Text:genereaza videoclip-uri prin intermediul unei imagini+descriere**\n\n"
          "**🛒 Prețuri:**\n" 
-        "🔹 **Acces(include 10 credite):** 2.99€\n"
-         "🔹 **Credite:** 1 credit = 0.40€\n\n"
+         "🔹 **Acces(include 10 credite):** 2.99€\n"
+         "🔹 **Credite:** 1 credit = 0.40€\n"
+         "🔹 **Video by text:** 1 credit\n"
+         "🔹 **Video by image+text:** 2 credit\n\n"
         ),
         color=discord.Color.dark_blue()
     )
