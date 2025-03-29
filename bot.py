@@ -197,22 +197,22 @@ async def on_interaction(interaction: discord.Interaction):
         except Exception as e:
             await interaction.followup.send("❌ Invalid input or timeout.", ephemeral=True)
 
-   if interaction.data["custom_id"] in ["video_text", "video_image"]:
-    if not has_access:
-        await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
-        return
+    if interaction.data["custom_id"] in ["video_text", "video_image"]:
+        if not has_access:
+            await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
+            return
 
-    required_credits = 2 if interaction.data["custom_id"] == "video_image" else 1
-    credits = get_credits(user.id)
-    if credits < required_credits:
-        await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
-        return
+        required_credits = 2 if interaction.data["custom_id"] == "video_image" else 1
+        credits = get_credits(user.id)
+        if credits < required_credits:
+            await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
+            return
 
-    # Show aspect ratio selection first
-    menu = VideoRatioMenu(interaction, interaction.data["custom_id"])  # Use the correct class here
-    message = await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
-    menu.message = message
-    return
+        # Show aspect ratio selection first
+        menu = VideoRatioMenu(interaction, interaction.data["custom_id"])  # Use the correct class here
+        message = await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
+        menu.message = message
+        return
 
     # Handle aspect ratio selection
     if interaction.data["custom_id"].startswith("ratio_"):
