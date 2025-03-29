@@ -213,7 +213,7 @@ async def on_interaction(interaction: discord.Interaction):
         return
 
    # Handle aspect ratio selection
-if interaction.data["custom_id"].startswith("ratio_"):
+    if interaction.data["custom_id"].startswith("ratio_"):
     ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
     video_type = "video_text" if "text" in interaction.data["custom_id"] else "video_image"
 
