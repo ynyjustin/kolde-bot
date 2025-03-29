@@ -167,6 +167,7 @@ async def on_interaction(interaction: discord.Interaction):
     # Prevent double response errors
     defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9_video_text", "ratio_9_16_video_image"]
 
+    # If defer is needed and not done, defer the response to prevent the error
     if defer_needed and not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True)
 
@@ -252,6 +253,7 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_message("⚠️ Invalid video type selection!", ephemeral=True)
             return
 
+        # Now ask for the prompt (text or image depending on video type)
         prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
         await interaction.followup.send(prompt_request, ephemeral=True)
 
