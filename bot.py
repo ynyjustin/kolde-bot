@@ -215,16 +215,21 @@ async def on_interaction(interaction: discord.Interaction):
     # Handle aspect ratio selection
     if interaction.data["custom_id"].startswith("ratio_"):
         ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
-        video_type = "video_text" if interaction.data["custom_id"].endswith("text") else "video_image"
 
-        # Determine prompt message based on video type
-        if video_type == "video_text":
+        # Check if video type is 'text' or 'image'
+        if "video_text" in interaction.data["custom_id"]:
+            video_type = "video_text"
             prompt_request = "📝 Please enter your text prompt:"  # For video_text, only request text
-        else:  # video_image
+        elif "video_image" in interaction.data["custom_id"]:
+            video_type = "video_image"
             prompt_request = "🖼️ Upload an image and enter a text prompt:"  # For video_image, ask for image + text
+        else:
+            video_type = None
+            prompt_request = None
 
         # Send the prompt to the user
-        await interaction.followup.send(prompt_request, ephemeral=True)
+        if video_type:
+            await interaction.followup.send(prompt_request, ephemeral=True)
 
         def check(msg):
             return msg.author == user and msg.channel == interaction.channel
