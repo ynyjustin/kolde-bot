@@ -146,15 +146,16 @@ class VideoRatioMenu(discord.ui.View):
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
+    # Check if the interaction has already been acknowledged
+    if not interaction.response.is_done():
+        await interaction.response.defer()
+
     user = interaction.user
     guild = interaction.guild
     member = guild.get_member(user.id) if guild else None
     has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles) if member else False
 
-    # Use defer only when necessary (immediately after receiving an interaction)
-    if not interaction.response.is_done():
-        await interaction.response.defer()
-
+    # Handle different custom_id values
     if interaction.data["custom_id"] == "get_access":
         session_url = create_checkout_session(user.id)
         await interaction.followup.send(
