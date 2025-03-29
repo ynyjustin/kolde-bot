@@ -135,6 +135,17 @@ class PaymentMenu(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="💰 Buy Access", url="https://example.com/buy", style=discord.ButtonStyle.link))
 
+# --- Video Ratio Selection Menu ---
+class VideoRatioMenu(discord.ui.View):
+    def __init__(self, original_interaction, mode):
+        super().__init__(timeout=None)
+        self.original_interaction = original_interaction
+        self.mode = mode  # "video_text" or "video_image"
+
+        self.add_item(discord.ui.Button(label="16:9", style=discord.ButtonStyle.blurple, custom_id="ratio_16_9"))
+        self.add_item(discord.ui.Button(label="9:16", style=discord.ButtonStyle.blurple, custom_id="ratio_9_16"))
+        self.add_item(discord.ui.Button(label="1:1", style=discord.ButtonStyle.blurple, custom_id="ratio_1_1"))
+
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     user = interaction.user
