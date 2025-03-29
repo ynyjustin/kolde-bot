@@ -216,13 +216,13 @@ async def on_interaction(interaction: discord.Interaction):
     if interaction.data["custom_id"].startswith("ratio_"):
         ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
 
-        # Check if video type is 'text' or 'image'
+        # Check for video_text vs video_image in custom_id
         if "video_text" in interaction.data["custom_id"]:
             video_type = "video_text"
-            prompt_request = "📝 Please enter your text prompt:"  # For video_text, only request text
+            prompt_request = "📝 Please enter your text prompt:"  # Only text is required
         elif "video_image" in interaction.data["custom_id"]:
             video_type = "video_image"
-            prompt_request = "🖼️ Upload an image and enter a text prompt:"  # For video_image, ask for image + text
+            prompt_request = "🖼️ Upload an image and enter a text prompt:"  # Image + Text required
         else:
             video_type = None
             prompt_request = None
