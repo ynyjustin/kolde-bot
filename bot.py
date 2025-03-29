@@ -144,9 +144,12 @@ class VideoRatioMenu(discord.ui.View):
         self.add_item(discord.ui.Button(label="9:16", style=discord.ButtonStyle.blurple, custom_id="ratio_9_16"))
         self.add_item(discord.ui.Button(label="1:1", style=discord.ButtonStyle.blurple, custom_id="ratio_1_1"))
 
+import discord
+import asyncio
+import sqlite3
+
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
-    # Check if the interaction has already been acknowledged
     if not interaction.response.is_done():
         await interaction.response.defer()
 
@@ -155,29 +158,34 @@ async def on_interaction(interaction: discord.Interaction):
     member = guild.get_member(user.id) if guild else None
     has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles) if member else False
 
-    # Handle different custom_id values
-    if interaction.data["custom_id"] == "get_access":
+    custom_id = interaction.data.get("custom_id", "")
+
+    print(f"Interaction received: {custom_id}")  # Debugging
+
+    if custom_id == "get_access":
         session_url = create_checkout_session(user.id)
         await interaction.followup.send(
             "🔒 You need access! Click below to purchase:",
-            view=discord.ui.View().add_item(discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)),
+            view=discord.ui.View().add_item(
+                discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
+            ),
             ephemeral=True
         )
         return
 
-    if interaction.data["custom_id"] == "login":
+    if custom_id == "login":
         if has_access:
             await interaction.followup.send("✅ You now have access to all functions!", view=FullFunctionMenu(), ephemeral=True)
         else:
             await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
-    if interaction.data["custom_id"] == "check_credits":
+    if custom_id == "check_credits":
         credits = get_credits(user.id)
         await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
         return
 
-    if interaction.data["custom_id"] == "buy_credits":
+    if custom_id == "buy_credits":
         await interaction.followup.send("💰 Enter how many credits you want to buy (min 5):", ephemeral=True)
 
         def check(m):
@@ -192,47 +200,49 @@ async def on_interaction(interaction: discord.Interaction):
                 return
 
             session_url = create_credit_purchase_session(user.id, quantity)
-            await interaction.followup.send("Click below to purchase your credits:",
-                                           view=discord.ui.View().add_item(discord.ui.Button(label="💳 Buy Now", url=session_url)),
-                                           ephemeral=True)
-        except Exception as e:
+            await interaction.followup.send(
+                "Click below to purchase your credits:",
+                view=discord.ui.View().add_item(discord.ui.Button(label="💳 Buy Now", url=session_url)),
+                ephemeral=True
+            )
+        except Exception:
             await interaction.followup.send("❌ Invalid input or timeout.", ephemeral=True)
 
-    if interaction.data["custom_id"] in ["video_text", "video_image"]:
+    if custom_id in ["video_text", "video_image"]:
         if not has_access:
             await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
 
-        required_credits = 2 if interaction.data["custom_id"] == "video_image" else 1
+        required_credits = 2 if custom_id == "video_image" else 1
         credits = get_credits(user.id)
         if credits < required_credits:
             await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
             return
 
-        # Show aspect ratio selection first
-        menu = VideoRatioMenu(interaction, interaction.data["custom_id"])  # Use the correct class here
+        print(f"User selecting aspect ratio for {custom_id}")  # Debugging
+
+        # Show aspect ratio selection
+        menu = VideoRatioMenu(interaction, custom_id)
         message = await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
         menu.message = message
         return
 
-    # Handle aspect ratio selection
-    if interaction.data["custom_id"].startswith("ratio_"):
-        ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
+    if custom_id.startswith("ratio_"):
+        parts = custom_id.split("_")
+        ratio = f"{parts[1]}_{parts[2]}"  # Example: "16_9", "9_16", "1_1"
+        video_type = parts[3] if len(parts) > 3 else None  # Extract video type
 
-        # Check for video_text vs video_image in custom_id
-        if "video_text" in interaction.data["custom_id"]:
-            video_type = "video_text"
-            prompt_request = "📝 Please enter your text prompt:"  # Only text is required
-        elif "video_image" in interaction.data["custom_id"]:
-            video_type = "video_image"
-            prompt_request = "🖼️ Upload an image and enter a text prompt:"  # Image + Text required
+        print(f"Ratio selected: {ratio}, Video Type: {video_type}")  # Debugging
+
+        if video_type == "video_text":
+            prompt_request = "📝 Please enter your text prompt:"
+        elif video_type == "video_image":
+            prompt_request = "🖼️ Upload an image and enter a text prompt:"
         else:
-            video_type = None
-            prompt_request = None
+            await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
+            return
 
-        # Send the prompt to the user
-        if video_type:
-            await interaction.followup.send(prompt_request, ephemeral=True)
+        await interaction.followup.send(prompt_request, ephemeral=True)
 
         def check(msg):
             return msg.author == user and msg.channel == interaction.channel
@@ -242,10 +252,9 @@ async def on_interaction(interaction: discord.Interaction):
             prompt = msg.content
             image_url = None
 
-            # Handle video_image case: if an image is attached, save the image URL
             if video_type == "video_image":
                 if msg.attachments:
-                    image_url = msg.attachments[0].url  # Store the image URL
+                    image_url = msg.attachments[0].url
                 else:
                     await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
                     return
@@ -256,7 +265,7 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
 
-        # Deduct credits
+        required_credits = 2 if video_type == "video_image" else 1
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         cursor.execute("UPDATE user_credits SET credits = credits - ? WHERE user_id = ?", (required_credits, user.id))
@@ -266,10 +275,7 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
 
-        # Here you would generate a video URL based on the type of video and other parameters
         url = f"https://example.com/video/{user.id}?ratio={ratio}&image={image_url}"
-
-        # Save video (or relevant information)
         save_video(user.id, url)
 
         try:
@@ -278,7 +284,7 @@ async def on_interaction(interaction: discord.Interaction):
         except discord.Forbidden:
             await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
 
-    if interaction.data["custom_id"] == "history":
+    if custom_id == "history":
         if not has_access:
             await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
