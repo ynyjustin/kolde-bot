@@ -212,63 +212,63 @@ async def on_interaction(interaction: discord.Interaction):
         menu.message = message
         return
 
-   # Handle aspect ratio selection
-if interaction.data["custom_id"].startswith("ratio_"):
-    ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
-    video_type = "video_text" if "text" in interaction.data["custom_id"] else "video_image"
+    # Handle aspect ratio selection
+    if interaction.data["custom_id"].startswith("ratio_"):
+        ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
+        video_type = "video_text" if "text" in interaction.data["custom_id"] else "video_image"
 
-    # Determine prompt message based on video type
-    if video_type == "video_text":
-        prompt_request = "📝 Please enter your text prompt:"  # For video_text, only request text
-    else:  # video_image
-        prompt_request = "🖼️ Upload an image and enter a text prompt:"  # For video_image, ask for image + text
+        # Determine prompt message based on video type
+        if video_type == "video_text":
+            prompt_request = "📝 Please enter your text prompt:"  # For video_text, only request text
+        else:  # video_image
+            prompt_request = "🖼️ Upload an image and enter a text prompt:"  # For video_image, ask for image + text
 
-    # Send the prompt to the user
-    await interaction.followup.send(prompt_request, ephemeral=True)
+        # Send the prompt to the user
+        await interaction.followup.send(prompt_request, ephemeral=True)
 
-    def check(msg):
-        return msg.author == user and msg.channel == interaction.channel
+        def check(msg):
+            return msg.author == user and msg.channel == interaction.channel
 
-    try:
-        msg = await bot.wait_for("message", check=check, timeout=60)
-        prompt = msg.content
-        image_url = None
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=60)
+            prompt = msg.content
+            image_url = None
 
-        # Handle video_image case: if an image is attached, save the image URL
-        if video_type == "video_image":
-            if msg.attachments:
-                image_url = msg.attachments[0].url  # Store the image URL
-            else:
-                await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
-                return
+            # Handle video_image case: if an image is attached, save the image URL
+            if video_type == "video_image":
+                if msg.attachments:
+                    image_url = msg.attachments[0].url  # Store the image URL
+                else:
+                    await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
+                    return
 
-        await msg.delete()
+            await msg.delete()
 
-    except asyncio.TimeoutError:
-        await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
-        return
+        except asyncio.TimeoutError:
+            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
+            return
 
-    # Deduct credits
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE user_credits SET credits = credits - ? WHERE user_id = ?", (required_credits, user.id))
-    conn.commit()
-    conn.close()
+        # Deduct credits
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE user_credits SET credits = credits - ? WHERE user_id = ?", (required_credits, user.id))
+        conn.commit()
+        conn.close()
 
-    await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-    await asyncio.sleep(5)
+        await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
+        await asyncio.sleep(5)
 
-    # Here you would generate a video URL based on the type of video and other parameters
-    url = f"https://example.com/video/{user.id}?ratio={ratio}&image={image_url}"
+        # Here you would generate a video URL based on the type of video and other parameters
+        url = f"https://example.com/video/{user.id}?ratio={ratio}&image={image_url}"
 
-    # Save video (or relevant information)
-    save_video(user.id, url)
+        # Save video (or relevant information)
+        save_video(user.id, url)
 
-    try:
-        await user.send(f"🎥 Your video is ready! Click here: {url}")
-        await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
-    except discord.Forbidden:
-        await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
+        try:
+            await user.send(f"🎥 Your video is ready! Click here: {url}")
+            await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
 
     if interaction.data["custom_id"] == "history":
         if not has_access:
