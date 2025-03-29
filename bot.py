@@ -155,6 +155,9 @@ import sqlite3
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
+    if not interaction.response.is_done():
+        await interaction.response.defer()
+
     user = interaction.user
     guild = interaction.guild
     member = guild.get_member(user.id) if guild else None
@@ -164,16 +167,9 @@ async def on_interaction(interaction: discord.Interaction):
 
     print(f"Interaction received: {custom_id}")  # Debugging
 
-    # Prevent double response errors
-    defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9_video_text", "ratio_9_16_video_image"]
-
-    # If defer is needed and not done, defer the response to prevent the error
-    if defer_needed and not interaction.response.is_done():
-        await interaction.response.defer(ephemeral=True)
-
     if custom_id == "get_access":
         session_url = create_checkout_session(user.id)
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "🔒 You need access! Click below to purchase:",
             view=discord.ui.View().add_item(
                 discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
@@ -184,18 +180,18 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id == "login":
         if has_access:
-            await interaction.response.send_message("✅ You now have access to all functions!", view=FullFunctionMenu(), ephemeral=True)
+            await interaction.followup.send("✅ You now have access to all functions!", view=FullFunctionMenu(), ephemeral=True)
         else:
-            await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
+            await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
     if custom_id == "check_credits":
         credits = get_credits(user.id)
-        await interaction.response.send_message(f"💼 You have **{credits}** credits.", ephemeral=True)
+        await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
         return
 
     if custom_id == "buy_credits":
-        await interaction.response.send_message("💰 Enter how many credits you want to buy (min 5):", ephemeral=True)
+        await interaction.followup.send("💰 Enter how many credits you want to buy (min 5):", ephemeral=True)
 
         def check(m):
             return m.author.id == user.id and m.channel == interaction.channel
@@ -216,17 +212,16 @@ async def on_interaction(interaction: discord.Interaction):
             )
         except Exception:
             await interaction.followup.send("❌ Invalid input or timeout.", ephemeral=True)
-        return
 
     if custom_id in ["video_text", "video_image"]:
         if not has_access:
-            await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
+            await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
 
         required_credits = 2 if custom_id == "video_image" else 1
         credits = get_credits(user.id)
         if credits < required_credits:
-            await interaction.response.send_message("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
+            await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
             return
 
         print(f"User selecting aspect ratio for {custom_id}")  # Debugging
@@ -238,27 +233,21 @@ async def on_interaction(interaction: discord.Interaction):
         return
 
     if custom_id.startswith("ratio_"):
-        parts = custom_id.split("_")  # Example: ["ratio", "16", "9", "video_text"]
-
-        if len(parts) < 4:
-            await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
-            return
-
-        ratio = f"{parts[1]}_{parts[2]}"  # Example: "16_9"
-        video_type = parts[3]  # Should be "video_text" or "video_image"
+        parts = custom_id.split("_")
+        ratio = f"{parts[1]}_{parts[2]}"  # Example: "16_9", "9_16", "1_1"
+        video_type = parts[3] if len(parts) > 3 else None  # Extract video type
 
         print(f"Ratio selected: {ratio}, Video Type: {video_type}")  # Debugging
 
-        # Skip the invalid check. Directly proceed with asking for the prompt.
-
         if video_type == "video_text":
-            # Only ask for the text prompt if it's a text video
             prompt_request = "📝 Please enter your text prompt:"
-            await interaction.followup.send(prompt_request, ephemeral=True)
         elif video_type == "video_image":
-            # If it's a video_image, also ask for the image + prompt
             prompt_request = "🖼️ Upload an image and enter a text prompt:"
-            await interaction.followup.send(prompt_request, ephemeral=True)
+        else:
+            await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
+            return
+
+        await interaction.followup.send(prompt_request, ephemeral=True)
 
         def check(msg):
             return msg.author == user and msg.channel == interaction.channel
@@ -302,7 +291,7 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id == "history":
         if not has_access:
-            await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
+            await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
 
         history = fetch_video_history(user.id)
@@ -313,7 +302,7 @@ async def on_interaction(interaction: discord.Interaction):
             history_text = "\n".join([f"📹 {video}" for video in history])
             embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
             await interaction.followup.send(embed=embed, ephemeral=True)
-
+            
 def save_video(user_id, url):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
