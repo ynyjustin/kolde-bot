@@ -151,7 +151,9 @@ async def on_interaction(interaction: discord.Interaction):
     member = guild.get_member(user.id) if guild else None
     has_access = any(role.id == ACCESS_ROLE_ID for role in member.roles) if member else False
 
-    await interaction.response.defer()
+    # Use defer only when necessary (immediately after receiving an interaction)
+    if not interaction.response.is_done():
+        await interaction.response.defer()
 
     if interaction.data["custom_id"] == "get_access":
         session_url = create_checkout_session(user.id)
