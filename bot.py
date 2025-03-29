@@ -233,7 +233,7 @@ async def on_interaction(interaction: discord.Interaction):
 
         # Show aspect ratio selection
         menu = VideoRatioMenu(interaction, custom_id)
-        message = await interaction.response.send_message("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
+        message = await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
         menu.message = message
         return
 
@@ -241,7 +241,7 @@ async def on_interaction(interaction: discord.Interaction):
         parts = custom_id.split("_")  # Example: ["ratio", "16", "9", "video_text"]
 
         if len(parts) < 4:
-            await interaction.response.send_message("⚠️ Invalid video type selection!", ephemeral=True)
+            await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
             return
 
         ratio = f"{parts[1]}_{parts[2]}"  # Example: "16_9"
@@ -250,7 +250,7 @@ async def on_interaction(interaction: discord.Interaction):
         print(f"Ratio selected: {ratio}, Video Type: {video_type}")  # Debugging
 
         if video_type not in ["video_text", "video_image"]:
-            await interaction.response.send_message("⚠️ Invalid video type selection!", ephemeral=True)
+            await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
             return
 
         # Now ask for the prompt (text or image depending on video type)
@@ -305,11 +305,11 @@ async def on_interaction(interaction: discord.Interaction):
         history = fetch_video_history(user.id)
 
         if not history:
-            await interaction.response.send_message("📜 No history found!", ephemeral=True)
+            await interaction.followup.send("📜 No history found!", ephemeral=True)
         else:
             history_text = "\n".join([f"📹 {video}" for video in history])
             embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
 def save_video(user_id, url):
     conn = sqlite3.connect(DB_FILE)
