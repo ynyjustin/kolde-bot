@@ -174,6 +174,7 @@ async def on_interaction(interaction: discord.Interaction):
         try:
             msg = await bot.wait_for("message", timeout=30.0, check=check)
             quantity = int(msg.content)
+            await msg.delete()
             if quantity < MIN_CREDITS:
                 await interaction.followup.send("❌ Minimum is 5 credits.", ephemeral=True)
                 return
@@ -185,7 +186,7 @@ async def on_interaction(interaction: discord.Interaction):
         except Exception as e:
             await interaction.followup.send("❌ Invalid input or timeout.", ephemeral=True)
 
-    if interaction.data["custom_id"] in ["video_text", "video_image"]:
+       if interaction.data["custom_id"] in ["video_text", "video_image"]:
         if not has_access:
             await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
@@ -196,7 +197,18 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
             return
 
-        prompt_request = "📝 Please enter your prompt:" if interaction.data["custom_id"] == "video_text" else "🖼️ Upload an image and enter a prompt:"
+        # Show aspect ratio selection first
+        menu = RatioSelectionMenu(user, interaction.data["custom_id"])
+        message = await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
+        menu.message = message
+        return
+
+    # Handle aspect ratio selection
+    if interaction.data["custom_id"].startswith("ratio_"):
+        ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
+        video_type = "video_text" if "text" in interaction.data else "video_image"
+
+        prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
         await interaction.followup.send(prompt_request, ephemeral=True)
 
         def check(msg):
@@ -207,7 +219,7 @@ async def on_interaction(interaction: discord.Interaction):
             prompt = msg.content
             image_url = None
 
-            if interaction.data["custom_id"] == "video_image":
+            if video_type == "video_image":
                 if msg.attachments:
                     image_url = msg.attachments[0].url
                 else:
@@ -220,6 +232,7 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
             return
 
+        # Deduct credits
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         cursor.execute("UPDATE user_credits SET credits = credits - ? WHERE user_id = ?", (required_credits, user.id))
@@ -229,7 +242,7 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
 
-        url = f"https://example.com/video/{user.id}"
+        url = f"https://example.com/video/{user.id}?ratio={ratio}"
         save_video(user.id, url)
 
         try:
@@ -269,8 +282,16 @@ def fetch_video_history(user_id):
 
 async def setup_menu(channel):
     embed = discord.Embed(
-        title="🎬 Welcome to Kolde AI Video Generator",
-        description="Generate AI-powered videos using text or image + prompt.",
+        title="🎬 Kolde AI",
+        description=(
+"Kolde AI este primul serviciu romanesc prin care puteti genera videoclip-uri AI!"
+        "**Functii:**\n"
+         "📝 **Video by text prompt-genereaza videoclip-uri folosind o descriere:** 1 credit\n"
+         "🖼️ **Video by Image+Text-genereaza videoclip-uri prin intermediul unei imagini+descriere:** 2 credite\n\n"
+         "**🛒 Prețuri:**\n" 
+        "🔹 **Acces(include 10 credite):** 2.99€\n"
+         "🔹 **Credite:** 1 credit = 0.40€\n\n"
+        ),
         color=discord.Color.dark_blue()
     )
     await channel.send(embed=embed, view=MainMenu())
