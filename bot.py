@@ -135,14 +135,19 @@ class PaymentMenu(discord.ui.View):
 
 # --- Video Ratio Selection Menu ---
 class VideoRatioMenu(discord.ui.View):
-    def __init__(self, original_interaction, mode):
-        super().__init__(timeout=None)
-        self.original_interaction = original_interaction
-        self.mode = mode  # "video_text" or "video_image"
+    def __init__(self, interaction: discord.Interaction, video_type: str):
+        super().__init__(timeout=60)
+        self.add_item(RatioButton("16:9", f"ratio_16_9_{video_type}"))
+        self.add_item(RatioButton("9:16", f"ratio_9_16_{video_type}"))
+        self.add_item(RatioButton("1:1", f"ratio_1_1_{video_type}"))
 
-        self.add_item(discord.ui.Button(label="16:9", style=discord.ButtonStyle.blurple, custom_id="ratio_16_9"))
-        self.add_item(discord.ui.Button(label="9:16", style=discord.ButtonStyle.blurple, custom_id="ratio_9_16"))
-        self.add_item(discord.ui.Button(label="1:1", style=discord.ButtonStyle.blurple, custom_id="ratio_1_1"))
+class RatioButton(discord.ui.Button):
+    def __init__(self, label: str, custom_id: str):
+        super().__init__(label=label, style=discord.ButtonStyle.primary, custom_id=custom_id)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await interaction.followup.send(f"You selected {self.custom_id}!", ephemeral=True)
 
 import discord
 import asyncio
@@ -228,18 +233,24 @@ async def on_interaction(interaction: discord.Interaction):
         return
 
     if custom_id.startswith("ratio_"):
-        parts = custom_id.split("_")
-        ratio = f"{parts[1]}_{parts[2]}"  # Example: "16_9", "9_16", "1_1"
-        video_type = parts[3] if len(parts) > 3 else None  # Extract video type
+    parts = custom_id.split("_")  # Example: ["ratio", "16", "9", "video_text"]
 
-        print(f"Ratio selected: {ratio}, Video Type: {video_type}")  # Debugging
+    if len(parts) < 4:
+        await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
+        return
 
-        if video_type == "video_text":
-            prompt_request = "📝 Please enter your text prompt:"
-        elif video_type == "video_image":
-            prompt_request = "🖼️ Upload an image and enter a text prompt:"
-        else:
-            await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
+    ratio = f"{parts[1]}_{parts[2]}"  # Example: "16_9"
+    video_type = parts[3]  # Should be "video_text" or "video_image"
+
+    print(f"Ratio selected: {ratio}, Video Type: {video_type}")  # Debugging
+
+    if video_type not in ["video_text", "video_image"]:
+        await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
+        return
+
+    prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
+    await interaction.followup.send(prompt_request, ephemeral=True)
+
             return
 
         await interaction.followup.send(prompt_request, ephemeral=True)
