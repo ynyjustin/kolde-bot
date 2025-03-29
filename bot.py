@@ -251,9 +251,14 @@ async def on_interaction(interaction: discord.Interaction):
 
         # Skip the invalid check. Directly proceed with asking for the prompt.
 
-        # Now ask for the prompt (text or image depending on video type)
-        prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
-        await interaction.followup.send(prompt_request, ephemeral=True)
+        if video_type == "video_text":
+            # Only ask for the text prompt if it's a text video
+            prompt_request = "📝 Please enter your text prompt:"
+            await interaction.followup.send(prompt_request, ephemeral=True)
+        elif video_type == "video_image":
+            # If it's a video_image, also ask for the image + prompt
+            prompt_request = "🖼️ Upload an image and enter a text prompt:"
+            await interaction.followup.send(prompt_request, ephemeral=True)
 
         def check(msg):
             return msg.author == user and msg.channel == interaction.channel
