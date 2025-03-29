@@ -212,39 +212,39 @@ async def on_interaction(interaction: discord.Interaction):
         menu.message = message
         return
 
-   # Handle aspect ratio selection
-if interaction.data["custom_id"].startswith("ratio_"):
-    ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
-    video_type = "video_text" if "text" in interaction.data["custom_id"] else "video_image"
+    # Handle aspect ratio selection
+    if interaction.data["custom_id"].startswith("ratio_"):
+        ratio = interaction.data["custom_id"].split("_")[-1]  # Get 16_9, 9_16, or 1_1
+        video_type = "video_text" if "text" in interaction.data["custom_id"] else "video_image"
 
-    if video_type == "video_text":
-        prompt_request = "📝 Please enter your text prompt:"
-    else:  # video_image
-        prompt_request = "🖼️ Upload an image and enter a text prompt:"
+        if video_type == "video_text":
+            prompt_request = "📝 Please enter your text prompt:"
+        else:  # video_image
+            prompt_request = "🖼️ Upload an image and enter a text prompt:"
 
-    await interaction.followup.send(prompt_request, ephemeral=True)
+        await interaction.followup.send(prompt_request, ephemeral=True)
 
-    def check(msg):
-        return msg.author == user and msg.channel == interaction.channel
+        def check(msg):
+            return msg.author == user and msg.channel == interaction.channel
 
-    try:
-        msg = await bot.wait_for("message", check=check, timeout=60)
-        prompt = msg.content
-        image_url = None
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=60)
+            prompt = msg.content
+            image_url = None
 
-        # Only for video_image, check if an image is attached
-        if video_type == "video_image":
-            if msg.attachments:
-                image_url = msg.attachments[0].url
-            else:
-                await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
-                return
+            # Only for video_image, check if an image is attached
+            if video_type == "video_image":
+                if msg.attachments:
+                    image_url = msg.attachments[0].url
+                else:
+                    await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
+                    return
 
-        await msg.delete()
+            await msg.delete()
 
-    except asyncio.TimeoutError:
-        await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
-        return
+        except asyncio.TimeoutError:
+            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
+            return
 
         # Deduct credits
         conn = sqlite3.connect(DB_FILE)
