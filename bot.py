@@ -249,6 +249,7 @@ async def on_interaction(interaction: discord.Interaction):
 
         print(f"Ratio selected: {ratio}, Video Type: {video_type}")  # Debugging
 
+        # Make sure the video_type is valid before proceeding
         if video_type not in ["video_text", "video_image"]:
             await interaction.followup.send("⚠️ Invalid video type selection!", ephemeral=True)
             return
