@@ -155,9 +155,6 @@ import sqlite3
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
-    if not interaction.response.is_done():
-        await interaction.response.defer()
-
     user = interaction.user
     guild = interaction.guild
     member = guild.get_member(user.id) if guild else None
@@ -167,9 +164,15 @@ async def on_interaction(interaction: discord.Interaction):
 
     print(f"Interaction received: {custom_id}")  # Debugging
 
+    # Prevent double response errors
+    defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9_video_text", "ratio_9_16_video_image"]
+
+    if defer_needed and not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+
     if custom_id == "get_access":
         session_url = create_checkout_session(user.id)
-        await interaction.followup.send(
+        await interaction.response.send_message(
             "🔒 You need access! Click below to purchase:",
             view=discord.ui.View().add_item(
                 discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
@@ -180,18 +183,18 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id == "login":
         if has_access:
-            await interaction.followup.send("✅ You now have access to all functions!", view=FullFunctionMenu(), ephemeral=True)
+            await interaction.response.send_message("✅ You now have access to all functions!", view=FullFunctionMenu(), ephemeral=True)
         else:
-            await interaction.followup.send("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
+            await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
         return
 
     if custom_id == "check_credits":
         credits = get_credits(user.id)
-        await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
+        await interaction.response.send_message(f"💼 You have **{credits}** credits.", ephemeral=True)
         return
 
     if custom_id == "buy_credits":
-        await interaction.followup.send("💰 Enter how many credits you want to buy (min 5):", ephemeral=True)
+        await interaction.response.send_message("💰 Enter how many credits you want to buy (min 5):", ephemeral=True)
 
         def check(m):
             return m.author.id == user.id and m.channel == interaction.channel
@@ -216,20 +219,20 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id in ["video_text", "video_image"]:
         if not has_access:
-            await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
+            await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
 
         required_credits = 2 if custom_id == "video_image" else 1
         credits = get_credits(user.id)
         if credits < required_credits:
-            await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
+            await interaction.response.send_message("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
             return
 
         print(f"User selecting aspect ratio for {custom_id}")  # Debugging
 
         # Show aspect ratio selection
         menu = VideoRatioMenu(interaction, custom_id)
-        message = await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
+        message = await interaction.response.send_message("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
         menu.message = message
         return
 
@@ -250,7 +253,7 @@ async def on_interaction(interaction: discord.Interaction):
             return
 
         prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
-        await interaction.response.send_message(prompt_request, ephemeral=True)
+        await interaction.followup.send(prompt_request, ephemeral=True)
 
         def check(msg):
             return msg.author == user and msg.channel == interaction.channel
@@ -294,17 +297,17 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id == "history":
         if not has_access:
-            await interaction.followup.send("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
+            await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
 
         history = fetch_video_history(user.id)
 
         if not history:
-            await interaction.followup.send("📜 No history found!", ephemeral=True)
+            await interaction.response.send_message("📜 No history found!", ephemeral=True)
         else:
             history_text = "\n".join([f"📹 {video}" for video in history])
             embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
 def save_video(user_id, url):
     conn = sqlite3.connect(DB_FILE)
