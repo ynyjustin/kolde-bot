@@ -91,8 +91,22 @@ def save_video(user_id, url):
 def fetch_video_history(user_id):
     response = supabase.table("video_history").select("video_url").eq("user_id", user_id).order("generated_at", desc=True).limit(10).execute()
     return [entry["video_url"] for entry in response.data]
-    
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def init_db():
+    try:
+        # Supabase doesn't support table creation via client, so just validate with a test query
+        # Optional: Insert dummy rows to ensure the table structure works
+
+        # Test user_credits table
+        supabase.table("user_credits").select("user_id, credits").limit(1).execute()
+
+        # Test video_history table
+        supabase.table("video_history").select("user_id, video_url, generated_at").limit(1).execute()
+
+        print("✅ Tables are accessible and seem to exist.")
+    except Exception as e:
+        print("❌ Error accessing Supabase tables! Make sure 'user_credits' and 'video_history' exist.")
+        print(e)
 
 intents = discord.Intents.default()
 intents.message_content = True
