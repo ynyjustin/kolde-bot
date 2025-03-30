@@ -282,61 +282,60 @@ async def on_interaction(interaction: discord.Interaction):
         return
 
     if custom_id.startswith("ratio_"):
-        parts = custom_id.split("_")
-        if len(parts) < 3:
-            await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
+    parts = custom_id.split("_")
+    if len(parts) < 3:
+        await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
+        return
+
+    ratio = f"{parts[1]}_{parts[2]}"  # Extracting ratio (e.g., 16:9, 9:16)
+    video_type = "video_text" if "video_text" in custom_id else "video_image"
+
+    await interaction.response.defer(ephemeral=True)
+
+    prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
+    await interaction.followup.send(prompt_request, ephemeral=True)
+
+    def check(msg):
+        return msg.author == user and msg.channel == interaction.channel
+
+    try:
+        msg = await bot.wait_for("message", check=check, timeout=60)
+        prompt = msg.content
+        image_url = msg.attachments[0].url if video_type == "video_image" and msg.attachments else None
+
+        if video_type == "video_image" and not image_url:
+            await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
             return
-
-        ratio = f"{parts[1]}_{parts[2]}"  # Extracting ratio (e.g., 16:9, 9:16)
-        video_type = "video_text" if "video_text" in custom_id else "video_image"
-
-        # Just defer to avoid double responses (you are already sending the message in callback)
-        await interaction.response.defer(ephemeral=True)
-    
-        # Now, send the correct prompt message
-        prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
-        await interaction.followup.send(prompt_request, ephemeral=True)
-
-        def check(msg):
-            return msg.author == user and msg.channel == interaction.channel
 
         try:
-            msg = await bot.wait_for("message", check=check, timeout=60)
-            prompt = msg.content
-            image_url = msg.attachments[0].url if video_type == "video_image" and msg.attachments else None
+            await msg.delete()
+        except discord.NotFound:
+            print("Message already deleted or not found.")
 
-            if video_type == "video_image" and not image_url:
-                await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
-                return
+    except asyncio.TimeoutError:
+        await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
+        return
 
-            try:
-                await msg.delete()
-            except discord.NotFound:
-                print("Message already deleted or not found.")
+    required_credits = 2 if video_type == "video_image" else 1
+    deduct_credits(user.id, required_credits)
 
-        except asyncio.TimeoutError:
-            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
-            return
+    await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
+    await asyncio.sleep(5)  # Simulating processing delay
 
-        required_credits = 2 if video_type == "video_image" else 1
-        deduct_credits(user.id, required_credits)
+    # Correct indentation here
+    video_url = generate_video(prompt, ratio, image_url)
 
-        await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-        await asyncio.sleep(5)
+    if not video_url:
+        await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
+        return
 
-            video_url = generate_video(prompt, ratio, image_url)
+    save_video(user.id, video_url)
 
-            if not video_url:
-                await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
-                return
-
-            save_video(user.id, video_url)
-
-            try:
-                await user.send(f"🎥 Your video is ready! Click here: {video_url}")
-                await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
-            except discord.Forbidden:
-                await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
+    try:
+        await user.send(f"🎥 Your video is ready! Click here: {video_url}")
+        await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
 
     if custom_id == "history":
         if not has_access:
