@@ -393,4 +393,34 @@ async def list_credits(ctx):
     else:
         await ctx.send("❌ No credit records found.")
 
+@bot.command(name="post_tos")
+@commands.has_permissions(administrator=True)
+async def post_tos(ctx):
+    embed = discord.Embed(
+        title="📜 Termeni și Condiții – Kolde AI",
+        description=(
+            "**🔒 Plăți & Securitate**\n"
+            "- Toate plățile sunt procesate prin Stripe – o platformă securizată și global recunoscută.\n"
+            "- Nu stocăm detalii ale cardurilor sau informații bancare.\n\n"
+            "**💸 Politica de Rambursare**\n"
+            "- Rambursările sunt disponibile doar în cazul unei erori tehnice majore.\n"
+            "- Creditele consumate nu pot fi returnate.\n\n"
+            "**🛠️ Funcționalități**\n"
+            "- Generare video AI pe bază de text sau imagine + text.\n"
+            "- Istoric video personal și sistem de creditare.\n\n"
+            "**📈 Prețuri**\n"
+            "- Acces: 2.99€ (include 10 credite).\n"
+            "- Credit: 0.40€/credit.\n"
+            "- Video text: 1 credit | Video imagine+text: 2 credite.\n\n"
+            "**📌 Alte Detalii**\n"
+            "- Kolde AI este un serviciu experimental.\n"
+            "- Accesul poate fi revocat în caz de abuz sau spam.\n"
+            "- Prin utilizare, ești de acord cu acești termeni."
+        ),
+        color=discord.Color.orange()
+    )
+    embed.set_footer(text="Ultima actualizare: Martie 2025")
+
+    await ctx.send(embed=embed)
+
 bot.run(TOKEN)
