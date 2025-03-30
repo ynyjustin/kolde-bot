@@ -175,7 +175,7 @@ class RatioButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         # Simply defer to avoid duplicate prompt request
-        if not await interaction.response.is_done():
+        if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
         
 @bot.event
