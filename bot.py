@@ -93,12 +93,21 @@ def fetch_video_history(user_id):
     response = supabase.table("video_history").select("video_url").eq("user_id", user_id).order("generated_at", desc=True).limit(10).execute()
     return [entry["video_url"] for entry in response.data]
 
-def generate_video(prompt: str, aspect_ratio: str, image_url=None):
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "Authorization": f"Bearer {RUNWAY_API_KEY}"  # Ensure the correct API key is used
-    }
+def generate_video(prompt, ratio, image_url=None):
+    try:
+        response = requests.post(
+            "API_URL",
+            json={"prompt": prompt, "ratio": ratio, "image_url": image_url},
+            timeout=30  # Avoid infinite waiting
+        )
+        response.raise_for_status()  # Raise exception for HTTP errors
+
+        data = response.json()
+        return data.get("video_url")  # Ensure this key exists
+
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ API Error: {e}")
+        return None
     
     # Default parameters based on the API documentation
     payload = {
