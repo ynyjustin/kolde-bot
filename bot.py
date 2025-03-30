@@ -92,6 +92,15 @@ def fetch_video_history(user_id):
     response = supabase.table("video_history").select("video_url").eq("user_id", user_id).order("generated_at", desc=True).limit(10).execute()
     return [entry["video_url"] for entry in response.data]
     
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+intents = discord.Intents.default()
+intents.message_content = True
+intents.guilds = True
+intents.members = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
 # --- Main Menu ---
 class MainMenu(discord.ui.View):
     def __init__(self):
@@ -302,21 +311,6 @@ async def on_interaction(interaction: discord.Interaction):
         except discord.errors.NotFound:
             print("Interaction expired before responding.")
             
-def save_video(user_id, url):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO video_history (user_id, video_url, generated_at) VALUES (?, ?, ?)", (user_id, url, datetime.utcnow()))
-    conn.commit()
-    conn.close()
-
-def fetch_video_history(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT video_url FROM video_history WHERE user_id = ?", (user_id,))
-    history = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return history
-
 async def setup_menu(channel):
     embed = discord.Embed(
         title="🎬 Kolde AI",
