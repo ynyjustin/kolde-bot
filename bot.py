@@ -202,7 +202,12 @@ async def on_interaction(interaction: discord.Interaction):
         try:
             msg = await bot.wait_for("message", timeout=30.0, check=check)
             quantity = int(msg.content)
-            await msg.delete()
+
+            try:
+                await msg.delete()
+            except discord.NotFound:
+                print("Message already deleted or not found.")
+
             if quantity < MIN_CREDITS:
                 await interaction.followup.send("❌ Minimum is 5 credits.", ephemeral=True)
                 return
@@ -258,7 +263,10 @@ async def on_interaction(interaction: discord.Interaction):
                 await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
                 return
 
-            await msg.delete()
+            try:
+                await msg.delete()
+            except discord.NotFound:
+                print("Message already deleted or not found.")
 
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
@@ -291,6 +299,10 @@ async def on_interaction(interaction: discord.Interaction):
         history = fetch_video_history(user.id)
         history_text = "\n".join([f"📹 {video}" for video in history]) if history else "📜 No history found!"
         embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
+
+        if not interaction.response.is_done():  # Ensure no duplicate response
+            await interaction.response.defer(ephemeral=True)
+
         await interaction.followup.send(embed=embed, ephemeral=True)
             
 def save_video(user_id, url):
