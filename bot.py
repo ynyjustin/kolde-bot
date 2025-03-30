@@ -167,9 +167,9 @@ async def on_interaction(interaction: discord.Interaction):
 
     print(f"Interaction received: {custom_id}")  # Debugging
 
-    # Prevent double response errors
+    # Defer the interaction to avoid timeout errors and allow follow-up messages
     defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9", "ratio_9_16", "check_credits", "history"]
-
+    
     if defer_needed and not interaction.response.is_done():
         try:
             await interaction.response.defer(ephemeral=True)  # Deferring response
@@ -179,6 +179,8 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id == "get_access":
         session_url = create_checkout_session(user.id)
+        if interaction.response.is_done():  # Check if response is done before sending the message
+            return
         await interaction.response.send_message(
             "🔒 You need access! Click below to purchase:",
             view=discord.ui.View().add_item(
@@ -199,15 +201,13 @@ async def on_interaction(interaction: discord.Interaction):
     if custom_id == "check_credits":
         credits = get_credits(user.id)
 
-        try:
-            # Ensure the interaction is properly deferred before sending the follow-up
-            if not interaction.response.is_done():
-                await interaction.response.defer(ephemeral=True)  # Defer only if it's not already done
+        # Ensure the interaction is properly deferred before sending the follow-up
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)  # Defer only if it's not already done
 
+        if not interaction.response.is_done():
             await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
 
-        except discord.errors.NotFound:
-            print("Interaction expired before responding.")
         return
 
     if custom_id == "buy_credits":
@@ -268,9 +268,9 @@ async def on_interaction(interaction: discord.Interaction):
         ratio = f"{parts[1]}_{parts[2]}"  # Extracting ratio (e.g., 16:9, 9:16)
         video_type = "video_text" if "video_text" in custom_id else "video_image"
 
-        # Just defer to avoid double responses (you are already sending the message in callback)
+        # Just defer to avoid duplicate prompt request
         await interaction.response.defer(ephemeral=True)
-    
+        
         # Now, send the correct prompt message
         prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
         await interaction.followup.send(prompt_request, ephemeral=True)
