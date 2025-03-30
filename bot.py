@@ -94,23 +94,49 @@ def fetch_video_history(user_id):
     return [entry["video_url"] for entry in response.data]
 
 def generate_video(prompt: str, aspect_ratio: str, image_url=None):
-    headers = {"Authorization": f"Bearer {RUNWAY_API_KEY}"}
-    
-    payload = {
-        "prompt": prompt,
-        "aspect_ratio": aspect_ratio,
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "Authorization": f"Bearer {RUNWAY_API_KEY}"  # Ensure the correct API key is used
     }
     
+    # Default parameters based on the API documentation
+    payload = {
+        "text_prompt": prompt,  # The required text prompt
+        "model": "gen3",  # Default to 'gen3' model (can be changed)
+        "width": 1344,  # Default video width
+        "height": 768,  # Default video height
+        "motion": 5,  # Default motion intensity (won't be used by Gen3 Alpha)
+        "seed": 0,  # Random seed (0 means random)
+        "callback_url": None,  # You can provide a callback URL if needed
+        "time": "5s"  # Default video time
+    }
+    
+    # If you want to use a custom image, include it in the payload (optional)
     if image_url:
-        payload["image_url"] = image_url  # Include image if provided
-    
-    response = requests.post("https://api.runwayml.com/v1/generate", json=payload, headers=headers)
-    
+        payload["image_url"] = image_url
+
+    # Ensure the aspect_ratio is passed properly, adjusting width/height accordingly
+    if aspect_ratio == "16:9":
+        payload["width"] = 1344
+        payload["height"] = 768
+    elif aspect_ratio == "9:16":
+        payload["width"] = 768
+        payload["height"] = 1344
+    elif aspect_ratio == "1:1":
+        payload["width"] = 768
+        payload["height"] = 768
+
+    # Send POST request to the API
+    url = "https://api.aivideoapi.com/runway/generate/text"
+    response = requests.post(url, json=payload, headers=headers)
+
     if response.status_code == 200:
         data = response.json()
-        return data.get("video_url")  # The actual generated video link
+        video_url = data.get("video_url")  # Assuming the response contains the video URL
+        return video_url
     else:
-        print(f"❌ Error from Runway API: {response.text}")
+        print(f"❌ Error: {response.status_code} - {response.text}")
         return None
 
 def init_db():
