@@ -147,11 +147,7 @@ class RatioButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-
-import discord
-import asyncio
-import sqlite3
-
+        
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     user = interaction.user
