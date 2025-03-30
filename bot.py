@@ -246,7 +246,10 @@ async def on_interaction(interaction: discord.Interaction):
         required_credits = 2 if custom_id == "video_image" else 1
         credits = get_credits(user.id)
         if credits < required_credits:
-            await interaction.response.send_message("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
+            else:
+                await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
             return
 
         print(f"User selecting aspect ratio for {custom_id}")  # Debugging
@@ -289,11 +292,7 @@ async def on_interaction(interaction: discord.Interaction):
             return
 
         required_credits = 2 if video_type == "video_image" else 1
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute("UPDATE user_credits SET credits = credits - ? WHERE user_id = ?", (required_credits, user.id))
-        conn.commit()
-        conn.close()
+        deduct_credits(user.id, required_credits)
 
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
@@ -365,5 +364,33 @@ async def on_disconnect():
 @bot.event
 async def on_resumed():
     print("🔄 Reconnected successfully!")
+
+@bot.command(name="add_credits")
+@commands.has_permissions(administrator=True)
+async def add_credits_command(ctx, member: discord.Member, amount: int):
+    add_credits(member.id, amount)
+    await ctx.send(f"✅ Added {amount} credits to {member.mention}.")
+
+@bot.command(name="remove_credits")
+@commands.has_permissions(administrator=True)
+async def remove_credits_command(ctx, member: discord.Member):
+    supabase.table("user_credits").delete().eq("user_id", member.id).execute()
+    await ctx.send(f"🗑️ Removed all credits for {member.mention}.")
+
+@bot.command(name="check_credits")
+async def check_credits_command(ctx, member: discord.Member = None):
+    user = member or ctx.author
+    credits = get_credits(user.id)
+    await ctx.send(f"💰 {user.mention} has **{credits}** credits.")
+
+@bot.command(name="list_credits")
+@commands.has_permissions(administrator=True)
+async def list_credits(ctx):
+    result = supabase.table("user_credits").select("*").execute()
+    if result.data:
+        lines = [f"{row['user_id']}: {row['credits']} credits" for row in result.data]
+        await ctx.send("🧾 **All users & credits:**\n" + "\n".join(lines))
+    else:
+        await ctx.send("❌ No credit records found.")
 
 bot.run(TOKEN)
