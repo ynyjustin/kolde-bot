@@ -184,15 +184,15 @@ async def on_interaction(interaction: discord.Interaction):
         )
         return
 
-   if custom_id == "check_credits":
-       credits = get_credits(user.id)
-       try:
+    if custom_id == "check_credits":
+        credits = get_credits(user.id)
+        try:
         # Ensure the interaction is properly deferred before sending the follow-up
-           await interaction.response.defer(ephemeral=True)  
-           await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
-       except discord.errors.NotFound:
-           print("Interaction expired before responding.")
-       return
+            await interaction.response.defer(ephemeral=True)  
+            await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
+        except discord.errors.NotFound:
+            print("Interaction expired before responding.")
+        return
 
     if custom_id == "buy_credits":
         await interaction.response.send_message("💰 Enter how many credits you want to buy (min 5):", ephemeral=True)
