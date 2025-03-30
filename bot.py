@@ -163,7 +163,11 @@ async def on_interaction(interaction: discord.Interaction):
     defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9", "ratio_9_16", "check_credits", "history"]
 
     if defer_needed and not interaction.response.is_done():
-        await interaction.response.defer(ephemeral=True)  # Deferring response
+        try:
+            await interaction.response.defer(ephemeral=True)  # Deferring response
+        except discord.errors.NotFound:
+            print("Interaction expired before deferring.")
+            return  # Avoid continuing if interaction is expired
 
     if custom_id == "get_access":
         session_url = create_checkout_session(user.id)
@@ -187,12 +191,13 @@ async def on_interaction(interaction: discord.Interaction):
     if custom_id == "check_credits":
         credits = get_credits(user.id)
 
-        # Ensure the interaction is properly deferred before sending the follow-up
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=True)  # Defer only if it's not already done
-
         try:
+            # Ensure the interaction is properly deferred before sending the follow-up
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)  # Defer only if it's not already done
+
             await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
+
         except discord.errors.NotFound:
             print("Interaction expired before responding.")
         return
