@@ -1,11 +1,11 @@
 import os
 import discord
 from discord.ext import commands
-import sqlite3
 import asyncio
 import stripe
 from datetime import datetime
 from dotenv import load_dotenv
+from supabase import create_client, Client
 
 # Load environment variables
 load_dotenv()
@@ -14,17 +14,18 @@ RUNWAY_API_KEY = os.getenv("RUNWAY_API_KEY")
 CHANNEL_ID = 1227704136552939551
 ACCESS_ROLE_ID = 1227708209356345454
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 if not TOKEN or not RUNWAY_API_KEY:
     print("❌ ERROR: Missing bot token or API key!")
     exit(1)
 
 stripe.api_key = STRIPE_SECRET_KEY
-DB_FILE = "credits.db"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 CREDIT_COST = 0.4
 MIN_CREDITS = 5
-
 
 def create_checkout_session(user_id):
     session = stripe.checkout.Session.create(
@@ -43,7 +44,6 @@ def create_checkout_session(user_id):
         metadata={"user_id": user_id, "type": "access"}
     )
     return session.url
-
 
 def create_credit_purchase_session(user_id, amount):
     quantity = max(amount, MIN_CREDITS)
@@ -65,49 +65,33 @@ def create_credit_purchase_session(user_id, amount):
     )
     return session.url
 
-
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user_credits (
-            user_id INTEGER PRIMARY KEY,
-            credits INTEGER DEFAULT 0
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS video_history (
-            user_id INTEGER,
-            video_url TEXT,
-            generated_at TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-
 def get_credits(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("SELECT credits FROM user_credits WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else 0
-
+    response = supabase.table("user_credits").select("credits").eq("user_id", user_id).execute()
+    if response.data:
+        return response.data[0]["credits"]
+    return 0
 
 def add_credits(user_id, amount):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO user_credits (user_id, credits) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET credits = credits + ?", (user_id, amount, amount))
-    conn.commit()
-    conn.close()
+    current = get_credits(user_id)
+    if current:
+        supabase.table("user_credits").update({"credits": current + amount}).eq("user_id", user_id).execute()
+    else:
+        supabase.table("user_credits").insert({"user_id": user_id, "credits": amount}).execute()
 
+def deduct_credits(user_id, amount):
+    current = get_credits(user_id)
+    if current >= amount:
+        supabase.table("user_credits").update({"credits": current - amount}).eq("user_id", user_id).execute()
+        return True
+    return False
 
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+def save_video(user_id, url):
+    supabase.table("video_history").insert({"user_id": user_id, "video_url": url, "generated_at": datetime.utcnow().isoformat()}).execute()
 
-def user_has_access(member):
-    return any(role.id == ACCESS_ROLE_ID for role in member.roles)
-
+def fetch_video_history(user_id):
+    response = supabase.table("video_history").select("video_url").eq("user_id", user_id).order("generated_at", desc=True).limit(10).execute()
+    return [entry["video_url"] for entry in response.data]
+    
 # --- Main Menu ---
 class MainMenu(discord.ui.View):
     def __init__(self):
