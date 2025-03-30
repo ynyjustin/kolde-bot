@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands
 import asyncio
 import stripe
+import requests
 from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -91,6 +92,26 @@ def save_video(user_id, url):
 def fetch_video_history(user_id):
     response = supabase.table("video_history").select("video_url").eq("user_id", user_id).order("generated_at", desc=True).limit(10).execute()
     return [entry["video_url"] for entry in response.data]
+
+def generate_video(prompt: str, aspect_ratio: str, image_url=None):
+    headers = {"Authorization": f"Bearer {RUNWAY_API_KEY}"}
+    
+    payload = {
+        "prompt": prompt,
+        "aspect_ratio": aspect_ratio,
+    }
+    
+    if image_url:
+        payload["image_url"] = image_url  # Include image if provided
+    
+    response = requests.post("https://api.runwayml.com/v1/generate", json=payload, headers=headers)
+    
+    if response.status_code == 200:
+        data = response.json()
+        return data.get("video_url")  # The actual generated video link
+    else:
+        print(f"❌ Error from Runway API: {response.text}")
+        return None
 
 def init_db():
     try:
@@ -303,14 +324,19 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
 
-        url = f"https://example.com/video/{user.id}?ratio={ratio}&image={image_url}"
-        save_video(user.id, url)
+            video_url = generate_video(prompt, ratio, image_url)
 
-        try:
-            await user.send(f"🎥 Your video is ready! Click here: {url}")
-            await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
-        except discord.Forbidden:
-            await interaction.followup.send("⚠️ I couldn't DM you! Please enable DMs and try again.", ephemeral=True)
+            if not video_url:
+                await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
+                return
+
+            save_video(user.id, video_url)
+
+            try:
+                await user.send(f"🎥 Your video is ready! Click here: {video_url}")
+                await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
+            except discord.Forbidden:
+                await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
 
     if custom_id == "history":
         if not has_access:
