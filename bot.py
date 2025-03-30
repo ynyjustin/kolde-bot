@@ -153,6 +153,7 @@ class RatioButton(discord.ui.Button):
         super().__init__(label=label, style=discord.ButtonStyle.primary, custom_id=custom_id)
 
     async def callback(self, interaction: discord.Interaction):
+        # Simply defer to avoid duplicate prompt request
         await interaction.response.defer()
         
 @bot.event
@@ -264,9 +265,13 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
             return
 
-        ratio = f"{parts[1]}_{parts[2]}"
+        ratio = f"{parts[1]}_{parts[2]}"  # Extracting ratio (e.g., 16:9, 9:16)
         video_type = "video_text" if "video_text" in custom_id else "video_image"
 
+        # Just defer to avoid double responses (you are already sending the message in callback)
+        await interaction.response.defer(ephemeral=True)
+    
+        # Now, send the correct prompt message
         prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
         await interaction.followup.send(prompt_request, ephemeral=True)
 
