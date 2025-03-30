@@ -164,10 +164,10 @@ async def on_interaction(interaction: discord.Interaction):
     print(f"Interaction received: {custom_id}")  # Debugging
 
     # Prevent double response errors
-    defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9", "ratio_9_16"]
+    defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9", "ratio_9_16", "check_credits", "history"]
 
     if defer_needed and not interaction.response.is_done():
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True)  # Deferring response
 
     if custom_id == "get_access":
         session_url = create_checkout_session(user.id)
@@ -190,7 +190,10 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id == "check_credits":
         credits = get_credits(user.id)
-        await interaction.response.send_message(f"💼 You have **{credits}** credits.", ephemeral=True)
+        try:
+            await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
+        except discord.errors.NotFound:
+            print("Interaction expired before responding.")
         return
 
     if custom_id == "buy_credits":
@@ -300,10 +303,14 @@ async def on_interaction(interaction: discord.Interaction):
         history_text = "\n".join([f"📹 {video}" for video in history]) if history else "📜 No history found!"
         embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
 
-        if not interaction.response.is_done():  # Ensure no duplicate response
+        # Ensure no duplicate response
+        if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
 
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        try:
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        except discord.errors.NotFound:
+            print("Interaction expired before responding.")
             
 def save_video(user_id, url):
     conn = sqlite3.connect(DB_FILE)
