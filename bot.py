@@ -121,7 +121,7 @@ class MainMenu(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="🔓 Login", style=discord.ButtonStyle.blurple, custom_id="login"))
         self.add_item(discord.ui.Button(label="🔒 Get Access", style=discord.ButtonStyle.red, custom_id="get_access"))
-        self.add_item(discord.ui.Button(label="📄 Prompt Guide", url="https://example.com/prompt-guide", style=discord.ButtonStyle.link))
+        self.add_item(discord.ui.Button(label="📄 Prompt Guide", url="https://docs.google.com/document/d/13oxxQQvtHuHqdvIv5i6yIOgGldXGQk9AuGAeUiTlM4o/edit?usp=sharing", style=discord.ButtonStyle.link))
 
 # --- Full Function Menu ---
 class FullFunctionMenu(discord.ui.View):
