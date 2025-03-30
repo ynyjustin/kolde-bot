@@ -147,7 +147,6 @@ class RatioButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        await interaction.followup.send(f"You selected {self.custom_id}!", ephemeral=True)
 
 import discord
 import asyncio
@@ -165,7 +164,7 @@ async def on_interaction(interaction: discord.Interaction):
     print(f"Interaction received: {custom_id}")  # Debugging
 
     # Prevent double response errors
-    defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9_video_text", "ratio_9_16_video_image"]
+    defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9", "ratio_9_16"]
 
     if defer_needed and not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True)
@@ -182,10 +181,11 @@ async def on_interaction(interaction: discord.Interaction):
         return
 
     if custom_id == "login":
-        if has_access:
-            await interaction.response.send_message("✅ You now have access to all functions!", view=FullFunctionMenu(), ephemeral=True)
-        else:
-            await interaction.response.send_message("🔒 You need access! Choose a payment method below:", view=PaymentMenu(), ephemeral=True)
+        await interaction.response.send_message(
+            "✅ You now have access to all functions!" if has_access else "🔒 You need access! Choose a payment method below:",
+            view=FullFunctionMenu() if has_access else PaymentMenu(),
+            ephemeral=True
+        )
         return
 
     if custom_id == "check_credits":
@@ -236,17 +236,15 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id.startswith("ratio_"):
         parts = custom_id.split("_")
-        if len(parts) < 4:
+        if len(parts) < 3:
             await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
             return
 
         ratio = f"{parts[1]}_{parts[2]}"
-        video_type = parts[3]
+        video_type = "video_text" if "video_text" in custom_id else "video_image"
 
-        if video_type == "video_text":
-            await interaction.followup.send("📝 Please enter your text prompt:", ephemeral=True)
-        elif video_type == "video_image":
-            await interaction.followup.send("🖼️ Upload an image and enter a text prompt:", ephemeral=True)
+        prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
+        await interaction.followup.send(prompt_request, ephemeral=True)
 
         def check(msg):
             return msg.author == user and msg.channel == interaction.channel
@@ -254,14 +252,11 @@ async def on_interaction(interaction: discord.Interaction):
         try:
             msg = await bot.wait_for("message", check=check, timeout=60)
             prompt = msg.content
-            image_url = None
+            image_url = msg.attachments[0].url if video_type == "video_image" and msg.attachments else None
 
-            if video_type == "video_image":
-                if msg.attachments:
-                    image_url = msg.attachments[0].url
-                else:
-                    await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
-                    return
+            if video_type == "video_image" and not image_url:
+                await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
+                return
 
             await msg.delete()
 
@@ -294,13 +289,9 @@ async def on_interaction(interaction: discord.Interaction):
             return
 
         history = fetch_video_history(user.id)
-
-        if not history:
-            await interaction.followup.send("📜 No history found!", ephemeral=True)
-        else:
-            history_text = "\n".join([f"📹 {video}" for video in history])
-            embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
-            await interaction.followup.send(embed=embed, ephemeral=True)
+        history_text = "\n".join([f"📹 {video}" for video in history]) if history else "📜 No history found!"
+        embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
+        await interaction.followup.send(embed=embed, ephemeral=True)
             
 def save_video(user_id, url):
     conn = sqlite3.connect(DB_FILE)
