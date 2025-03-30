@@ -228,6 +228,8 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.response.send_message("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
             return
 
+        print(f"User selecting aspect ratio for {custom_id}")  # Debugging
+
         menu = VideoRatioMenu(interaction, custom_id)
         await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
         return
