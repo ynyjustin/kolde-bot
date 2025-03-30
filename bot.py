@@ -282,7 +282,7 @@ async def on_interaction(interaction: discord.Interaction):
         return
 
     if custom_id.startswith("ratio_"):
-    parts = custom_id.split("_")
+        parts = custom_id.split("_")
     if len(parts) < 3:
         await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
         return
