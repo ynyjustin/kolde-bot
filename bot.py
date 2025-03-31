@@ -102,15 +102,14 @@ def generate_video(prompt, ratio, image_url=None):
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
-        "Authorization": f"Bearer {RUNWAY_API_KEY}"  # Ensure API key is included
+        "Authorization": f"Bearer {RUNWAY_API_KEY}"
     }
 
-    # Aspect Ratio Handling
     if ratio == "16:9":
         width, height = 1344, 768
     elif ratio == "9:16":
         width, height = 768, 1344
-    else:  # Default 1:1
+    else:
         width, height = 768, 768
 
     payload = {
@@ -129,23 +128,42 @@ def generate_video(prompt, ratio, image_url=None):
 
     url = "https://api.aivideoapi.com/runway/generate/text"
 
-    print(f"📤 Sending API Request: {payload}")  # Debugging
+    print(f"📤 Sending API Request: {payload}")
 
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=30)
-        response.raise_for_status()  # Raise error for HTTP issues
-
+        response.raise_for_status()
         data = response.json()
-        print(f"📥 API Response: {data}")  # Debugging
 
-        if "video_url" in data:
+        if "job_id" in data:  # API returns a job ID, we need to check its status
+            job_id = data["job_id"]
+            video_url = None
+
+            for _ in range(30):  # Polling for ~30 seconds
+                status_response = requests.get(f"https://api.aivideoapi.com/job/status/{job_id}", headers=headers)
+                status_response.raise_for_status()
+                status_data = status_response.json()
+
+                if "video_url" in status_data:
+                    video_url = status_data["video_url"]
+                    break  # Exit loop when video is ready
+
+                time.sleep(5)  # Wait before checking again
+
+            if video_url:
+                return video_url
+            else:
+                print("❌ Video generation timed out.")
+                return None
+
+        elif "video_url" in data:
             return data["video_url"]
         else:
             print("❌ Unexpected API response:", data)
             return None
     except requests.exceptions.RequestException as e:
         print(f"❌ API Request Failed: {e}")
-        return f"Error: {e}"  # Return error so caller knows
+        return None
 
 def init_db():
     try:
@@ -353,10 +371,9 @@ async def on_interaction(interaction: discord.Interaction):
     deduct_credits(user.id, required_credits)
 
     await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-    await asyncio.sleep(5)  # Simulating processing delay
 
     # Correct indentation here
-    video_url = generate_video(prompt, ratio, image_url)
+    video_url = await generate_video(prompt, ratio, image_url)
 
     if not video_url:
         await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
