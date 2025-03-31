@@ -104,11 +104,19 @@ def generate_video(prompt, ratio, image_url=None):
         "Authorization": f"Bearer {RUNWAY_API_KEY}"  # Ensure API key is included
     }
 
+    # Aspect Ratio Handling
+    if ratio == "16:9":
+        width, height = 1344, 768
+    elif ratio == "9:16":
+        width, height = 768, 1344
+    else:  # Default 1:1
+        width, height = 768, 768
+
     payload = {
         "text_prompt": prompt,
         "model": "gen3",
-        "width": 1344 if ratio == "16:9" else 768,
-        "height": 768 if ratio == "1:1" else (1344 if ratio == "9:16" else 768),
+        "width": width,
+        "height": height,
         "motion": 5,
         "seed": 0,
         "callback_url": "",
@@ -120,19 +128,23 @@ def generate_video(prompt, ratio, image_url=None):
 
     url = "https://api.aivideoapi.com/runway/generate/text"
 
+    print(f"📤 Sending API Request: {payload}")  # Debugging
+
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=30)
         response.raise_for_status()  # Raise error for HTTP issues
 
         data = response.json()
+        print(f"📥 API Response: {data}")  # Debugging
+
         if "video_url" in data:
             return data["video_url"]
         else:
             print("❌ Unexpected API response:", data)
             return None
     except requests.exceptions.RequestException as e:
-        print("❌ API Request Failed:", e)
-        return None
+        print(f"❌ API Request Failed: {e}")
+        return f"Error: {e}"  # Return error so caller knows
 
 def init_db():
     try:
