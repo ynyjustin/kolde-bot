@@ -373,7 +373,13 @@ async def on_interaction(interaction: discord.Interaction):
     await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
 
     # Correct indentation here
-    video_url = await generate_video(prompt, ratio, image_url)
+    video_url = generate_video(prompt, ratio, image_url)
+
+    # Check if the API is still processing (if your API returns a placeholder status)
+    if video_url is None:
+        await interaction.followup.send("⏳ Still processing your video... Please wait a bit longer.", ephemeral=True)
+        await asyncio.sleep(10)  # Optional: Wait and check again (if API supports rechecking)
+        video_url = generate_video(prompt, ratio, image_url)
 
     if not video_url:
         await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
