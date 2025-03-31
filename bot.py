@@ -375,23 +375,34 @@ async def on_interaction(interaction: discord.Interaction):
     # Correct indentation here
     video_url = generate_video(prompt, ratio, image_url)
 
-    # Check if the API is still processing (if your API returns a placeholder status)
-    if video_url is None:
-        await interaction.followup.send("⏳ Still processing your video... Please wait a bit longer.", ephemeral=True)
-        await asyncio.sleep(10)  # Optional: Wait and check again (if API supports rechecking)
-        video_url = generate_video(prompt, ratio, image_url)
+    # Inform user that request is being processed
+await interaction.followup.send("⏳ Generating your video... Please wait.", ephemeral=True)
 
-    if not video_url:
-        await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
-        return
+# Call API and await response
+video_url = await generate_video(prompt, ratio, image_url)
 
-    save_video(user.id, video_url)
+# Check if API is still processing (if your API returns None for pending requests)
+if video_url is None:
+    await interaction.followup.send("⏳ Still processing your video... Please wait a bit longer.", ephemeral=True)
 
-    try:
-        await user.send(f"🎥 Your video is ready! Click here: {video_url}")
-        await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
-    except discord.Forbidden:
-        await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
+    # Wait for processing and retry fetching result
+    await asyncio.sleep(10)  # Adjust timing if necessary
+    video_url = await generate_video(prompt, ratio, image_url)  # Ensure API supports re-checking status
+
+# If still no video URL, inform the user of failure
+if not video_url:
+    await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
+    return
+
+# Save the generated video
+save_video(user.id, video_url)
+
+# Notify the user and send the video link
+try:
+    await user.send(f"🎥 Your video is ready! Click here: {video_url}")
+    await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
+except discord.Forbidden:
+    await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
 
     if custom_id == "history":
         if not has_access:
