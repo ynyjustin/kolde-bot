@@ -72,11 +72,15 @@ def get_credits(user_id):
         return response.data[0]["credits"]
     return 0
 
-def add_credits(user_id, amount):
-    current = get_credits(user_id)
-    if current:
-        supabase.table("user_credits").update({"credits": current + amount}).eq("user_id", user_id).execute()
+def add_credits(user_id: int, amount: int):
+    existing_user = supabase.table("user_credits").select("credits").eq("user_id", user_id).execute()
+
+    if existing_user.data:
+        # If user exists, update their credits
+        new_credits = existing_user.data[0]["credits"] + amount
+        supabase.table("user_credits").update({"credits": new_credits}).eq("user_id", user_id).execute()
     else:
+        # If user does not exist, insert a new record
         supabase.table("user_credits").insert({"user_id": user_id, "credits": amount}).execute()
 
 def deduct_credits(user_id, amount):
