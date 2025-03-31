@@ -94,58 +94,40 @@ def fetch_video_history(user_id):
     return [entry["video_url"] for entry in response.data]
 
 def generate_video(prompt, ratio, image_url=None):
-    try:
-        response = requests.post(
-            "API_URL",
-            json={"prompt": prompt, "ratio": ratio, "image_url": image_url},
-            timeout=30  # Avoid infinite waiting
-        )
-        response.raise_for_status()  # Raise exception for HTTP errors
-
-        data = response.json()
-        return data.get("video_url")  # Ensure this key exists
-
-    except requests.exceptions.RequestException as e:
-        print(f"⚠️ API Error: {e}")
-        return None
-    
-    # Default parameters based on the API documentation
-    payload = {
-        "text_prompt": prompt,  # The required text prompt
-        "model": "gen3",  # Default to 'gen3' model (can be changed)
-        "width": 1344,  # Default video width
-        "height": 768,  # Default video height
-        "motion": 5,  # Default motion intensity (won't be used by Gen3 Alpha)
-        "seed": 0,  # Random seed (0 means random)
-        "callback_url": None,  # You can provide a callback URL if needed
-        "time": 5  # Default video time
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "Authorization": f"Bearer {RUNWAY_API_KEY}"  # Ensure API key is included
     }
-    
-    # If you want to use a custom image, include it in the payload (optional)
+
+    payload = {
+        "text_prompt": prompt,
+        "model": "gen3",
+        "width": 1344 if ratio == "16:9" else 768,
+        "height": 768 if ratio == "1:1" else (1344 if ratio == "9:16" else 768),
+        "motion": 5,
+        "seed": 0,
+        "callback_url": "",
+        "time": 5
+    }
+
     if image_url:
         payload["image_url"] = image_url
 
-    # Ensure the aspect_ratio is passed properly, adjusting width/height accordingly
-    if aspect_ratio == "16:9":
-        payload["width"] = 1344
-        payload["height"] = 768
-    elif aspect_ratio == "9:16":
-        payload["width"] = 768
-        payload["height"] = 1344
-    elif aspect_ratio == "1:1":
-        payload["width"] = 768
-        payload["height"] = 768
-
-    # Send POST request to the API
     url = "https://api.aivideoapi.com/runway/generate/text"
-    response = requests.post(url, json=payload, headers=headers)
 
-    if response.status_code == 200:
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()  # Raise error for HTTP issues
+
         data = response.json()
-        video_url = data.get("video_url")  # Assuming the response contains the video URL
-        return video_url
-    else:
-        print(f"❌ Error: {response.status_code} - {response.text}")
+        if "video_url" in data:
+            return data["video_url"]
+        else:
+            print("❌ Unexpected API response:", data)
+            return None
+    except requests.exceptions.RequestException as e:
+        print("❌ API Request Failed:", e)
         return None
 
 def init_db():
