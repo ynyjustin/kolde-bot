@@ -4,6 +4,7 @@ from discord.ext import commands
 import asyncio
 import stripe
 import requests
+import time 
 from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client, Client
