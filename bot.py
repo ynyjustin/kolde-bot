@@ -118,7 +118,7 @@ def generate_video(prompt, ratio, image_url=None):
         "motion": 5,  # Default motion intensity (won't be used by Gen3 Alpha)
         "seed": 0,  # Random seed (0 means random)
         "callback_url": None,  # You can provide a callback URL if needed
-        "time": "5s"  # Default video time
+        "time": 5  # Default video time
     }
     
     # If you want to use a custom image, include it in the payload (optional)
