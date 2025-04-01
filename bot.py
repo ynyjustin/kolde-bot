@@ -242,37 +242,47 @@ async def on_interaction(interaction: discord.Interaction):
 
     defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9", "ratio_9_16", "check_credits", "history"]
 
+    # Deferring interaction right away if necessary
     if defer_needed and not interaction.response.is_done():
         try:
             await interaction.response.defer(ephemeral=True)
         except discord.errors.NotFound:
             print("Interaction expired before deferring.")
-            return  
+            return
 
     if custom_id == "get_access":
         session_url = create_checkout_session(user.id)
-        await interaction.response.send_message(
-            "🔒 You need access! Click below to purchase:",
-            view=discord.ui.View().add_item(
-                discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
-            ),
-            ephemeral=True
-        )
+        try:
+            await interaction.response.send_message(
+                "🔒 You need access! Click below to purchase:",
+                view=discord.ui.View().add_item(
+                    discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
+                ),
+                ephemeral=True
+            )
+        except discord.errors.NotFound:
+            print("Failed to send message. Interaction might have expired.")
         return
 
     if custom_id == "login":
-        await interaction.response.send_message(
-            "✅ You now have access to all functions!" if has_access else "🔒 You need access! Choose a payment method below:",
-            view=FullFunctionMenu() if has_access else PaymentMenu(),
-            ephemeral=True
-        )
+        try:
+            await interaction.response.send_message(
+                "✅ You now have access to all functions!" if has_access else "🔒 You need access! Choose a payment method below:",
+                view=FullFunctionMenu() if has_access else PaymentMenu(),
+                ephemeral=True
+            )
+        except discord.errors.NotFound:
+            print("Failed to send message. Interaction might have expired.")
         return
 
     if custom_id == "check_credits":
         credits = get_credits(user.id)
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
+        try:
+            await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
+        except discord.errors.NotFound:
+            print("Failed to send follow-up message. Interaction might have expired.")
         return
 
     if custom_id == "buy_credits":
