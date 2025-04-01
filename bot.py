@@ -358,20 +358,19 @@ async def on_interaction(interaction: discord.Interaction):
 
         status_message = await interaction.followup.send("⏳ Generating your video... 0%", ephemeral=True)
 
-        wait_time = 300  # Maximum wait time in seconds (5 minutes)
+        wait_time = 300  # Increase waiting time to 5 minutes (300 seconds)
         update_interval = 10  # Check every 10 seconds
-        elapsed = 0
-        video_url = None
-
-        while elapsed < wait_time:
-            await asyncio.sleep(update_interval)
-            elapsed += update_interval
+        for elapsed in range(0, wait_time, update_interval):
             percent = int((elapsed / wait_time) * 100)
             await status_message.edit(content=f"⏳ Generating your video... {percent}%")
-            
+            await asyncio.sleep(update_interval)
+
+        video_url = None
+        for attempt in range(3):  # Retry 3 times
             video_url = await generate_video(prompt, ratio, image_url)
             if video_url:
                 break
+            await asyncio.sleep(30)  # Wait 30 seconds before retrying
 
         if not video_url:
             await status_message.edit(content="❌ Failed to generate video. Please try again later.")
