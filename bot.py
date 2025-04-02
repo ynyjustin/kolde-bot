@@ -98,13 +98,14 @@ def fetch_video_history(user_id):
     response = supabase.table("video_history").select("video_url").eq("user_id", user_id).order("generated_at", desc=True).limit(10).execute()
     return [entry["video_url"] for entry in response.data]
 
-def generate_video(prompt, ratio, image_url=None):
+async def generate_video(prompt, ratio, image_url=None):
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
         "Authorization": f"Bearer {RUNWAY_API_KEY}"
     }
 
+    # Define video dimensions based on aspect ratio
     if ratio == "16:9":
         width, height = 1344, 768
     elif ratio == "9:16":
@@ -138,29 +139,36 @@ def generate_video(prompt, ratio, image_url=None):
         if "job_id" in data:  # API returns a job ID, we need to check its status
             job_id = data["job_id"]
             video_url = None
+            elapsed_time = 0
+            max_wait_time = 600  # Maximum wait time (10 minutes)
+            poll_interval = 10    # Check every 10 seconds
 
-            for _ in range(30):  # Polling for ~30 seconds
+            print(f"📡 Polling API for video status (Job ID: {job_id})...")
+
+            while elapsed_time < max_wait_time:
                 status_response = requests.get(f"https://api.aivideoapi.com/job/status/{job_id}", headers=headers)
                 status_response.raise_for_status()
                 status_data = status_response.json()
 
                 if "video_url" in status_data:
                     video_url = status_data["video_url"]
-                    break  # Exit loop when video is ready
+                    print(f"✅ Video generated successfully: {video_url}")
+                    return video_url  # Return the video URL as soon as it's ready
 
-                time.sleep(5)  # Wait before checking again
+                time.sleep(poll_interval)
+                elapsed_time += poll_interval
+                print(f"⏳ Waiting for video... {elapsed_time}/{max_wait_time} seconds elapsed.")
 
-            if video_url:
-                return video_url
-            else:
-                print("❌ Video generation timed out.")
-                return None
+            print("❌ Video generation timed out after 10 minutes.")
+            return None
 
-        elif "video_url" in data:
+        elif "video_url" in data:  # Some APIs may return the video URL directly
             return data["video_url"]
+
         else:
             print("❌ Unexpected API response:", data)
             return None
+
     except requests.exceptions.RequestException as e:
         print(f"❌ API Request Failed: {e}")
         return None
