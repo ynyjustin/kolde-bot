@@ -135,8 +135,9 @@ async def generate_video(prompt, ratio, image_url=None):
         response = requests.post(url, json=payload, headers=headers, timeout=30)
         response.raise_for_status()
         data = response.json()
+        print(f"🔄 API Response: {data}")  # DEBUG LOGGING
 
-        if "job_id" in data:  # API returns a job ID, we need to check its status
+        if "job_id" in data:
             job_id = data["job_id"]
             video_url = None
             elapsed_time = 0
@@ -149,11 +150,16 @@ async def generate_video(prompt, ratio, image_url=None):
                 status_response = requests.get(f"https://api.aivideoapi.com/job/status/{job_id}", headers=headers)
                 status_response.raise_for_status()
                 status_data = status_response.json()
+                print(f"🔍 Job Status: {status_data}")  # DEBUG LOGGING
 
                 if "video_url" in status_data:
                     video_url = status_data["video_url"]
                     print(f"✅ Video generated successfully: {video_url}")
-                    return video_url  # Return the video URL as soon as it's ready
+                    return video_url  
+
+                if status_data.get("status") in ["failed", "error"]:
+                    print("❌ Video generation failed on the API side.")
+                    return None  # Explicitly return None if API fails
 
                 time.sleep(poll_interval)
                 elapsed_time += poll_interval
@@ -162,7 +168,7 @@ async def generate_video(prompt, ratio, image_url=None):
             print("❌ Video generation timed out after 10 minutes.")
             return None
 
-        elif "video_url" in data:  # Some APIs may return the video URL directly
+        elif "video_url" in data:
             return data["video_url"]
 
         else:
@@ -341,7 +347,7 @@ async def on_interaction(interaction: discord.Interaction):
         parts = custom_id.split("_")
         if len(parts) < 3:
             await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
-            return
+           return
 
         ratio = f"{parts[1]}_{parts[2]}"
         video_type = "video_text" if "video_text" in custom_id else "video_image"
@@ -376,19 +382,8 @@ async def on_interaction(interaction: discord.Interaction):
 
         status_message = await interaction.followup.send("⏳ Generating your video... 0%", ephemeral=True)
 
-        wait_time = 300  # Increase waiting time to 5 minutes (300 seconds)
-        update_interval = 10  # Check every 10 seconds
-        for elapsed in range(0, wait_time, update_interval):
-            percent = int((elapsed / wait_time) * 100)
-            await status_message.edit(content=f"⏳ Generating your video... {percent}%")
-            await asyncio.sleep(update_interval)
-
-        video_url = None
-        for attempt in range(3):  # Retry 3 times
-            video_url = await generate_video(prompt, ratio, image_url)
-            if video_url:
-                break
-            await asyncio.sleep(30)  # Wait 30 seconds before retrying
+    # Wait for video processing
+        video_url = await generate_video(prompt, ratio, image_url)
 
         if not video_url:
             await status_message.edit(content="❌ Failed to generate video. Please try again later.")
