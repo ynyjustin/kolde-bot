@@ -343,7 +343,7 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
         return
 
-     if custom_id.startswith("ratio_"):
+    if custom_id.startswith("ratio_"):
         parts = custom_id.split("_")
         if len(parts) < 3:
             await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
