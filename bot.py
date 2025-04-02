@@ -161,7 +161,7 @@ async def generate_video(prompt, ratio, image_url=None):
                     print("❌ Video generation failed on the API side.")
                     return None  # Explicitly return None if API fails
 
-                time.sleep(poll_interval)
+                await asyncio.sleep(poll_interval)  # Use asyncio.sleep for async handling
                 elapsed_time += poll_interval
                 print(f"⏳ Waiting for video... {elapsed_time}/{max_wait_time} seconds elapsed.")
 
@@ -343,7 +343,7 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
         return
 
-    if custom_id.startswith("ratio_"):
+     if custom_id.startswith("ratio_"):
         parts = custom_id.split("_")
         if len(parts) < 3:
             await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
@@ -382,11 +382,36 @@ async def on_interaction(interaction: discord.Interaction):
 
         status_message = await interaction.followup.send("⏳ Generating your video... 0%", ephemeral=True)
 
-    # Wait for video processing
-        video_url = await generate_video(prompt, ratio, image_url)
+        # Wait for video processing with real-time updates
+        video_url = None
+        elapsed_time = 0
+        max_wait_time = 600  # Maximum wait time (10 minutes)
+        poll_interval = 10    # Check every 10 seconds
+
+        job_id = await generate_video(prompt, ratio, image_url)
+        if not job_id:
+            await status_message.edit(content="❌ Failed to generate video. Please try again later.")
+            return
+
+        while elapsed_time < max_wait_time:
+            status_data = requests.get(f"https://api.aivideoapi.com/job/status/{job_id}", headers={
+                "Authorization": f"Bearer {RUNWAY_API_KEY}"
+            }).json()
+            
+            if "video_url" in status_data:
+                video_url = status_data["video_url"]
+                break
+            
+            if status_data.get("status") in ["failed", "error"]:
+                await status_message.edit(content="❌ Video generation failed. Please try again later.")
+                return
+            
+            elapsed_time += poll_interval
+            await status_message.edit(content=f"⏳ Generating your video... {elapsed_time // 60}m {elapsed_time % 60}s elapsed.")
+            await asyncio.sleep(poll_interval)
 
         if not video_url:
-            await status_message.edit(content="❌ Failed to generate video. Please try again later.")
+            await status_message.edit(content="❌ Video generation timed out. Please try again later.")
             return
 
         save_video(user.id, video_url)
