@@ -347,7 +347,7 @@ async def on_interaction(interaction: discord.Interaction):
         parts = custom_id.split("_")
         if len(parts) < 3:
             await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
-           return
+            return
 
         ratio = f"{parts[1]}_{parts[2]}"
         video_type = "video_text" if "video_text" in custom_id else "video_image"
