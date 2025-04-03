@@ -223,16 +223,15 @@ async def on_interaction(interaction: discord.Interaction):
 
     print(f"Interaction received: {custom_id}")  # Debugging
 
-    # Prevent double response errors
     defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9", "ratio_9_16", "check_credits", "history"]
-
+    
     if defer_needed and not interaction.response.is_done():
         try:
-            await interaction.response.defer(ephemeral=True)  # Deferring response
+            await interaction.response.defer(ephemeral=True)
         except discord.errors.NotFound:
             print("Interaction expired before deferring.")
-            return  # Avoid continuing if interaction is expired
-
+            return
+    
     if custom_id == "get_access":
         session_url = create_checkout_session(user.id)
         await interaction.response.send_message(
@@ -243,7 +242,7 @@ async def on_interaction(interaction: discord.Interaction):
             ephemeral=True
         )
         return
-
+    
     if custom_id == "login":
         await interaction.response.send_message(
             "✅ You now have access to all functions!" if has_access else "🔒 You need access! Choose a payment method below:",
@@ -251,21 +250,14 @@ async def on_interaction(interaction: discord.Interaction):
             ephemeral=True
         )
         return
-
+    
     if custom_id == "check_credits":
         credits = get_credits(user.id)
-
-        try:
-            # Ensure the interaction is properly deferred before sending the follow-up
-            if not interaction.response.is_done():
-                await interaction.response.defer(ephemeral=True)  # Defer only if it's not already done
-
-            await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
-
-        except discord.errors.NotFound:
-            print("Interaction expired before responding.")
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
         return
-
+    
     if custom_id == "buy_credits":
         await interaction.response.send_message("💰 Enter how many credits you want to buy (min 5):", ephemeral=True)
         
@@ -275,7 +267,6 @@ async def on_interaction(interaction: discord.Interaction):
         try:
             msg = await bot.wait_for("message", timeout=30.0, check=check)
             quantity = int(msg.content)
-
             try:
                 await msg.delete()
             except discord.NotFound:
@@ -303,14 +294,10 @@ async def on_interaction(interaction: discord.Interaction):
         required_credits = 2 if custom_id == "video_image" else 1
         credits = get_credits(user.id)
         if credits < required_credits:
-            if not interaction.response.is_done():
-                await interaction.response.send_message("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
-            else:
-                await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
+            await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
             return
 
-        print(f"User selecting aspect ratio for {custom_id}")  # Debugging
-
+        print(f"User selecting aspect ratio for {custom_id}")
         menu = VideoRatioMenu(interaction, custom_id)
         await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
         return
@@ -321,55 +308,48 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
             return
 
-        ratio = f"{parts[1]}_{parts[2]}"  # Extracting ratio (e.g., 16:9, 9:16)
+        ratio = f"{parts[1]}_{parts[2]}"
         video_type = "video_text" if "video_text" in custom_id else "video_image"
-
-        await interaction.response.defer(ephemeral=True)  # Ensure deferring before responding
-
         prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
-        await interaction.followup.send(prompt_request, ephemeral=True)  # Send prompt only once
+        await interaction.followup.send(prompt_request, ephemeral=True)
 
-    def check(msg):
-        return msg.author == user and msg.channel == interaction.channel
-
-    try:
-        msg = await bot.wait_for("message", check=check, timeout=60)
-        prompt = msg.content
-        image_url = msg.attachments[0].url if video_type == "video_image" and msg.attachments else None
-
-        if video_type == "video_image" and not image_url:
-            await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
-            return
+        def check(msg):
+            return msg.author == user and msg.channel == interaction.channel
 
         try:
-            await msg.delete()
-        except discord.NotFound:
-            print("Message already deleted or not found.")
+            msg = await bot.wait_for("message", check=check, timeout=60)
+            prompt = msg.content
+            image_url = msg.attachments[0].url if video_type == "video_image" and msg.attachments else None
+            if video_type == "video_image" and not image_url:
+                await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
+                return
 
-    except asyncio.TimeoutError:
-        await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
-        return
+            try:
+                await msg.delete()
+            except discord.NotFound:
+                print("Message already deleted or not found.")
 
-    required_credits = 2 if video_type == "video_image" else 1
-    deduct_credits(user.id, required_credits)
+        except asyncio.TimeoutError:
+            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
+            return
 
-    await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-    await asyncio.sleep(5)  # Simulating processing delay
+        required_credits = 2 if video_type == "video_image" else 1
+        deduct_credits(user.id, required_credits)
 
-    # Correct indentation here
-    video_url = generate_video(prompt, ratio, image_url)
+        await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
+        await asyncio.sleep(5)
 
-    if not video_url:
-        await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
-        return
+        video_url = generate_video(prompt, ratio, image_url)
+        if not video_url:
+            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
+            return
 
-    save_video(user.id, video_url)
-
-    try:
-        await user.send(f"🎥 Your video is ready! Click here: {video_url}")
-        await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
-    except discord.Forbidden:
-        await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
+        save_video(user.id, video_url)
+        try:
+            await user.send(f"🎥 Your video is ready! Click here: {video_url}")
+            await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
 
     if custom_id == "history":
         if not has_access:
@@ -379,15 +359,7 @@ async def on_interaction(interaction: discord.Interaction):
         history = fetch_video_history(user.id)
         history_text = "\n".join([f"📹 {video}" for video in history]) if history else "📜 No history found!"
         embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
-
-        # Ensure no duplicate response
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=True)
-
-        try:
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        except discord.errors.NotFound:
-            print("Interaction expired before responding.")
+        await interaction.followup.send(embed=embed, ephemeral=True)
             
 async def setup_menu(channel):
     embed = discord.Embed(
