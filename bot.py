@@ -338,7 +338,10 @@ async def on_interaction(interaction: discord.Interaction):
                 await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
                 return
 
+        try:
             await msg.delete()
+        except discord.errors.NotFound:
+            print("Message already deleted or not found.")
 
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
@@ -351,6 +354,19 @@ async def on_interaction(interaction: discord.Interaction):
 
         job_id = await generate_video(prompt, ratio, image_url)
         if not job_id:
+            print("⚠️ API did not return a valid job_id. Debugging response...")
+    
+    # OPTIONAL: Add logging for debugging
+            try:
+                response = requests.post(
+                    "https://api.aivideoapi.com/generate",
+                    json={"prompt": prompt, "ratio": ratio, "image_url": image_url},
+                    headers={"Authorization": f"Bearer {RUNWAY_API_KEY}"}
+                )
+                print("📝 API Response:", response.status_code, response.text)
+            except Exception as e:
+                print("❌ API Request Error:", e)
+
             await status_message.edit(content="❌ Failed to generate video. Please try again later.")
             return
 
