@@ -317,17 +317,17 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id.startswith("ratio_"):
         parts = custom_id.split("_")
-    if len(parts) < 3:
-        await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
-        return
+        if len(parts) < 3:
+            await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
+            return
 
-    ratio = f"{parts[1]}_{parts[2]}"  # Extracting ratio (e.g., 16:9, 9:16)
-    video_type = "video_text" if "video_text" in custom_id else "video_image"
+        ratio = f"{parts[1]}_{parts[2]}"  # Extracting ratio (e.g., 16:9, 9:16)
+        video_type = "video_text" if "video_text" in custom_id else "video_image"
 
-    await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True)  # Ensure deferring before responding
 
-    prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
-    await interaction.followup.send(prompt_request, ephemeral=True)
+        prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
+        await interaction.followup.send(prompt_request, ephemeral=True)  # Send prompt only once
 
     def check(msg):
         return msg.author == user and msg.channel == interaction.channel
