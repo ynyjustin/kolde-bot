@@ -394,21 +394,30 @@ async def on_interaction(interaction: discord.Interaction):
             return
 
         while elapsed_time < max_wait_time:
-            status_data = requests.get(f"https://api.aivideoapi.com/job/status/{job_id}", headers={
-                "Authorization": f"Bearer {RUNWAY_API_KEY}"
-            }).json()
-            
-            if "video_url" in status_data:
-                video_url = status_data["video_url"]
-                break
-            
-            if status_data.get("status") in ["failed", "error"]:
-                await status_message.edit(content="❌ Video generation failed. Please try again later.")
-                return
-            
-            elapsed_time += poll_interval
-            await status_message.edit(content=f"⏳ Generating your video... {elapsed_time // 60}m {elapsed_time % 60}s elapsed.")
-            await asyncio.sleep(poll_interval)
+           try:
+               response = requests.get(f"https://api.aivideoapi.com/job/status/{job_id}", headers={
+                   "Authorization": f"Bearer {RUNWAY_API_KEY}"
+               })
+               status_data = response.json()
+        
+               print(f"🔍 Checking job status: {status_data}")  # Debugging API response
+
+               if "video_url" in status_data:
+                   video_url = status_data["video_url"]
+                   break
+
+               if status_data.get("status") in ["failed", "error"]:
+                   await status_message.edit(content="❌ Video generation failed. Please try again later.")
+                   return
+
+           except Exception as e:
+               print(f"⚠️ API request error: {e}")  # Debugging API failure
+               await status_message.edit(content="❌ Video generation failed due to API issues.")
+               return
+
+           elapsed_time += poll_interval
+           await status_message.edit(content=f"⏳ Generating your video... {elapsed_time // 60}m {elapsed_time % 60}s elapsed.")
+           await asyncio.sleep(poll_interval)
 
         if not video_url:
             await status_message.edit(content="❌ Video generation timed out. Please try again later.")
