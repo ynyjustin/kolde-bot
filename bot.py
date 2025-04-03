@@ -4,7 +4,6 @@ from discord.ext import commands
 import asyncio
 import stripe
 import requests
-import time 
 from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -73,15 +72,11 @@ def get_credits(user_id):
         return response.data[0]["credits"]
     return 0
 
-def add_credits(user_id: int, amount: int):
-    existing_user = supabase.table("user_credits").select("credits").eq("user_id", user_id).execute()
-
-    if existing_user.data:
-        # If user exists, update their credits
-        new_credits = existing_user.data[0]["credits"] + amount
-        supabase.table("user_credits").update({"credits": new_credits}).eq("user_id", user_id).execute()
+def add_credits(user_id, amount):
+    current = get_credits(user_id)
+    if current:
+        supabase.table("user_credits").update({"credits": current + amount}).eq("user_id", user_id).execute()
     else:
-        # If user does not exist, insert a new record
         supabase.table("user_credits").insert({"user_id": user_id, "credits": amount}).execute()
 
 def deduct_credits(user_id, amount):
@@ -98,85 +93,59 @@ def fetch_video_history(user_id):
     response = supabase.table("video_history").select("video_url").eq("user_id", user_id).order("generated_at", desc=True).limit(10).execute()
     return [entry["video_url"] for entry in response.data]
 
-async def generate_video(prompt, ratio, image_url=None):
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "Authorization": f"Bearer {RUNWAY_API_KEY}"
-    }
+def generate_video(prompt, ratio, image_url=None):
+    try:
+        response = requests.post(
+            "API_URL",
+            json={"prompt": prompt, "ratio": ratio, "image_url": image_url},
+            timeout=30  # Avoid infinite waiting
+        )
+        response.raise_for_status()  # Raise exception for HTTP errors
 
-    # Define video dimensions based on aspect ratio
-    if ratio == "16:9":
-        width, height = 1344, 768
-    elif ratio == "9:16":
-        width, height = 768, 1344
-    else:
-        width, height = 768, 768
+        data = response.json()
+        return data.get("video_url")  # Ensure this key exists
 
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ API Error: {e}")
+        return None
+    
+    # Default parameters based on the API documentation
     payload = {
-        "text_prompt": prompt,
-        "model": "gen3",
-        "width": width,
-        "height": height,
-        "motion": 5,
-        "seed": 0,
-        "callback_url": "",
-        "time": 5
+        "text_prompt": prompt,  # The required text prompt
+        "model": "gen3",  # Default to 'gen3' model (can be changed)
+        "width": 1344,  # Default video width
+        "height": 768,  # Default video height
+        "motion": 5,  # Default motion intensity (won't be used by Gen3 Alpha)
+        "seed": 0,  # Random seed (0 means random)
+        "callback_url": None,  # You can provide a callback URL if needed
+        "time": 5  # Default video time
     }
-
+    
+    # If you want to use a custom image, include it in the payload (optional)
     if image_url:
         payload["image_url"] = image_url
 
+    # Ensure the aspect_ratio is passed properly, adjusting width/height accordingly
+    if aspect_ratio == "16:9":
+        payload["width"] = 1344
+        payload["height"] = 768
+    elif aspect_ratio == "9:16":
+        payload["width"] = 768
+        payload["height"] = 1344
+    elif aspect_ratio == "1:1":
+        payload["width"] = 768
+        payload["height"] = 768
+
+    # Send POST request to the API
     url = "https://api.aivideoapi.com/runway/generate/text"
+    response = requests.post(url, json=payload, headers=headers)
 
-    print(f"📤 Sending API Request: {payload}")
-
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        response.raise_for_status()
+    if response.status_code == 200:
         data = response.json()
-        print(f"🔄 API Response: {data}")  # DEBUG LOGGING
-
-        if "job_id" in data:
-            job_id = data["job_id"]
-            video_url = None
-            elapsed_time = 0
-            max_wait_time = 600  # Maximum wait time (10 minutes)
-            poll_interval = 10    # Check every 10 seconds
-
-            print(f"📡 Polling API for video status (Job ID: {job_id})...")
-
-            while elapsed_time < max_wait_time:
-                status_response = requests.get(f"https://api.aivideoapi.com/job/status/{job_id}", headers=headers)
-                status_response.raise_for_status()
-                status_data = status_response.json()
-                print(f"🔍 Job Status: {status_data}")  # DEBUG LOGGING
-
-                if "video_url" in status_data:
-                    video_url = status_data["video_url"]
-                    print(f"✅ Video generated successfully: {video_url}")
-                    return video_url  
-
-                if status_data.get("status") in ["failed", "error"]:
-                    print("❌ Video generation failed on the API side.")
-                    return None  # Explicitly return None if API fails
-
-                await asyncio.sleep(poll_interval)  # Use asyncio.sleep for async handling
-                elapsed_time += poll_interval
-                print(f"⏳ Waiting for video... {elapsed_time}/{max_wait_time} seconds elapsed.")
-
-            print("❌ Video generation timed out after 10 minutes.")
-            return None
-
-        elif "video_url" in data:
-            return data["video_url"]
-
-        else:
-            print("❌ Unexpected API response:", data)
-            return None
-
-    except requests.exceptions.RequestException as e:
-        print(f"❌ API Request Failed: {e}")
+        video_url = data.get("video_url")  # Assuming the response contains the video URL
+        return video_url
+    else:
+        print(f"❌ Error: {response.status_code} - {response.text}")
         return None
 
 def init_db():
@@ -254,52 +223,79 @@ async def on_interaction(interaction: discord.Interaction):
 
     print(f"Interaction received: {custom_id}")  # Debugging
 
-    defer_needed = custom_id in [
-        "video_text", "video_image", "ratio_16_9", "ratio_9_16", 
-        "check_credits", "history"
-    ]
+    # Prevent double response errors
+    defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9", "ratio_9_16", "check_credits", "history"]
 
     if defer_needed and not interaction.response.is_done():
         try:
-            await interaction.response.defer(ephemeral=True)
+            await interaction.response.defer(ephemeral=True)  # Deferring response
         except discord.errors.NotFound:
             print("Interaction expired before deferring.")
-            return
+            return  # Avoid continuing if interaction is expired
 
     if custom_id == "get_access":
         session_url = create_checkout_session(user.id)
-        try:
-            await interaction.response.send_message(
-                "🔒 You need access! Click below to purchase:",
-                view=discord.ui.View().add_item(
-                    discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
-                ),
-                ephemeral=True
-            )
-        except discord.errors.NotFound:
-            print("Failed to send message. Interaction expired.")
+        await interaction.response.send_message(
+            "🔒 You need access! Click below to purchase:",
+            view=discord.ui.View().add_item(
+                discord.ui.Button(label="💰 Buy Access", style=discord.ButtonStyle.link, url=session_url)
+            ),
+            ephemeral=True
+        )
         return
 
     if custom_id == "login":
-        try:
-            await interaction.response.send_message(
-                "✅ You now have access to all functions!" if has_access else "🔒 You need access! Choose a payment method below:",
-                view=FullFunctionMenu() if has_access else PaymentMenu(),
-                ephemeral=True
-            )
-        except discord.errors.NotFound:
-            print("Failed to send message. Interaction expired.")
+        await interaction.response.send_message(
+            "✅ You now have access to all functions!" if has_access else "🔒 You need access! Choose a payment method below:",
+            view=FullFunctionMenu() if has_access else PaymentMenu(),
+            ephemeral=True
+        )
         return
 
     if custom_id == "check_credits":
         credits = get_credits(user.id)
+
         try:
+            # Ensure the interaction is properly deferred before sending the follow-up
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)  # Defer only if it's not already done
+
             await interaction.followup.send(f"💼 You have **{credits}** credits.", ephemeral=True)
+
         except discord.errors.NotFound:
-            print("Failed to send follow-up message. Interaction expired.")
+            print("Interaction expired before responding.")
         return
 
-    if custom_id == "video_text" or custom_id == "video_image":
+    if custom_id == "buy_credits":
+        await interaction.response.send_message("💰 Enter how many credits you want to buy (min 5):", ephemeral=True)
+        
+        def check(m):
+            return m.author.id == user.id and m.channel == interaction.channel
+
+        try:
+            msg = await bot.wait_for("message", timeout=30.0, check=check)
+            quantity = int(msg.content)
+
+            try:
+                await msg.delete()
+            except discord.NotFound:
+                print("Message already deleted or not found.")
+
+            if quantity < MIN_CREDITS:
+                await interaction.followup.send("❌ Minimum is 5 credits.", ephemeral=True)
+                return
+
+            session_url = create_credit_purchase_session(user.id, quantity)
+            await interaction.followup.send(
+                "Click below to purchase your credits:",
+                view=discord.ui.View().add_item(discord.ui.Button(label="💳 Buy Now", url=session_url)),
+                ephemeral=True
+            )
+        except Exception:
+            await interaction.followup.send("❌ Invalid input or timeout.", ephemeral=True)
+        return
+
+    if custom_id in ["video_text", "video_image"]:
         if not has_access:
             await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
             return
@@ -307,8 +303,13 @@ async def on_interaction(interaction: discord.Interaction):
         required_credits = 2 if custom_id == "video_image" else 1
         credits = get_credits(user.id)
         if credits < required_credits:
-            await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
+            else:
+                await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
             return
+
+        print(f"User selecting aspect ratio for {custom_id}")  # Debugging
 
         menu = VideoRatioMenu(interaction, custom_id)
         await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
@@ -316,100 +317,59 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id.startswith("ratio_"):
         parts = custom_id.split("_")
-        if len(parts) < 3:
-            await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
+    if len(parts) < 3:
+        await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
+        return
+
+    ratio = f"{parts[1]}_{parts[2]}"  # Extracting ratio (e.g., 16:9, 9:16)
+    video_type = "video_text" if "video_text" in custom_id else "video_image"
+
+    await interaction.response.defer(ephemeral=True)
+
+    prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
+    await interaction.followup.send(prompt_request, ephemeral=True)
+
+    def check(msg):
+        return msg.author == user and msg.channel == interaction.channel
+
+    try:
+        msg = await bot.wait_for("message", check=check, timeout=60)
+        prompt = msg.content
+        image_url = msg.attachments[0].url if video_type == "video_image" and msg.attachments else None
+
+        if video_type == "video_image" and not image_url:
+            await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
             return
-
-        ratio = f"{parts[1]}_{parts[2]}"
-        video_type = "video_text" if "video_text" in custom_id else "video_image"
-
-        prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
-        await interaction.followup.send(prompt_request, ephemeral=True)
-
-        def check(msg):
-            return msg.author == user and msg.channel == interaction.channel
 
         try:
-            msg = await bot.wait_for("message", check=check, timeout=60)
-            prompt = msg.content
-            image_url = msg.attachments[0].url if video_type == "video_image" and msg.attachments else None
+            await msg.delete()
+        except discord.NotFound:
+            print("Message already deleted or not found.")
 
-            if video_type == "video_image" and not image_url:
-                await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
-                return
+    except asyncio.TimeoutError:
+        await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
+        return
 
-            try:
-                await msg.delete()
-            except discord.errors.NotFound:
-                print("Message already deleted or not found.")
+    required_credits = 2 if video_type == "video_image" else 1
+    deduct_credits(user.id, required_credits)
 
-        except asyncio.TimeoutError:
-            await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
-            return
+    await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
+    await asyncio.sleep(5)  # Simulating processing delay
 
-        required_credits = 2 if video_type == "video_image" else 1
-        deduct_credits(user.id, required_credits)
+    # Correct indentation here
+    video_url = generate_video(prompt, ratio, image_url)
 
-        status_message = await interaction.followup.send("⏳ Generating your video... 0%", ephemeral=True)
+    if not video_url:
+        await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
+        return
 
-        job_id = await generate_video(prompt, ratio, image_url)
-        if not job_id:
-            print("⚠️ API did not return a valid job_id. Debugging response...")
-    
-    # OPTIONAL: Add logging for debugging
-            try:
-                response = requests.post(
-                    "https://api.aivideoapi.com/generate",
-                    json={"prompt": prompt, "ratio": ratio, "image_url": image_url},
-                    headers={"Authorization": f"Bearer {RUNWAY_API_KEY}"}
-                )
-                print("📝 API Response:", response.status_code, response.text)
-            except Exception as e:
-                print("❌ API Request Error:", e)
+    save_video(user.id, video_url)
 
-            await status_message.edit(content="❌ Failed to generate video. Please try again later.")
-            return
-
-        elapsed_time = 0
-        max_wait_time = 600  # 10 minutes
-        poll_interval = 10  
-
-        while elapsed_time < max_wait_time:
-            try:
-                response = requests.get(f"https://api.aivideoapi.com/job/status/{job_id}", headers={
-                    "Authorization": f"Bearer {RUNWAY_API_KEY}"
-                })
-                status_data = response.json()
-                print(f"🔍 Checking job status: {status_data}")
-
-                if "video_url" in status_data:
-                    video_url = status_data["video_url"]
-                    break
-
-                if status_data.get("status") in ["failed", "error"]:
-                    await status_message.edit(content="❌ Video generation failed. Please try again later.")
-                    return
-
-            except Exception as e:
-                print(f"⚠️ API request error: {e}")
-                await status_message.edit(content="❌ Video generation failed due to API issues.")
-                return
-
-            elapsed_time += poll_interval
-            await status_message.edit(content=f"⏳ Generating your video... {elapsed_time // 60}m {elapsed_time % 60}s elapsed.")
-            await asyncio.sleep(poll_interval)
-
-        if not video_url:
-            await status_message.edit(content="❌ Video generation timed out. Please try again later.")
-            return
-
-        save_video(user.id, video_url)
-
-        try:
-            await user.send(f"🎥 Your video is ready! Click here: {video_url}")
-            await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
-        except discord.Forbidden:
-            await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
+    try:
+        await user.send(f"🎥 Your video is ready! Click here: {video_url}")
+        await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
 
     if custom_id == "history":
         if not has_access:
@@ -419,6 +379,10 @@ async def on_interaction(interaction: discord.Interaction):
         history = fetch_video_history(user.id)
         history_text = "\n".join([f"📹 {video}" for video in history]) if history else "📜 No history found!"
         embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
+
+        # Ensure no duplicate response
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
 
         try:
             await interaction.followup.send(embed=embed, ephemeral=True)
