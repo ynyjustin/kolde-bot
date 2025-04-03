@@ -338,10 +338,10 @@ async def on_interaction(interaction: discord.Interaction):
                 await interaction.followup.send("⚠️ Please attach an image along with your text!", ephemeral=True)
                 return
 
-        try:
-            await msg.delete()
-        except discord.errors.NotFound:
-            print("Message already deleted or not found.")
+            try:
+                await msg.delete()
+            except discord.errors.NotFound:
+                print("Message already deleted or not found.")
 
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
