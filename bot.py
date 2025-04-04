@@ -212,6 +212,9 @@ class RatioButton(discord.ui.Button):
         if not interaction.response.is_done:  # Remove the await
             await interaction.response.defer(ephemeral=True)
         
+import discord
+import asyncio
+
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
     user = interaction.user
@@ -223,15 +226,14 @@ async def on_interaction(interaction: discord.Interaction):
 
     print(f"Interaction received: {custom_id}")  # Debugging
 
-    # Prevent double response errors
     defer_needed = custom_id in ["video_text", "video_image", "ratio_16_9", "ratio_9_16", "check_credits", "history"]
 
     if defer_needed and not interaction.response.is_done():
         try:
-            await interaction.response.defer(ephemeral=True)  # Deferring response
+            await interaction.response.defer(ephemeral=True)
         except discord.errors.NotFound:
             print("Interaction expired before deferring.")
-            return  # Avoid continuing if interaction is expired
+            return
 
     if custom_id == "get_access":
         session_url = create_checkout_session(user.id)
@@ -297,7 +299,7 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("⚠️ You don’t have enough credits. Please buy more.", ephemeral=True)
             return
 
-        print(f"User selecting aspect ratio for {custom_id}")  # Debugging
+        print(f"User selecting aspect ratio for {custom_id}")
 
         menu = VideoRatioMenu(interaction, custom_id)
         await interaction.followup.send("📐 Choose a video aspect ratio:", view=menu, ephemeral=True)
@@ -309,11 +311,13 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("⚠️ Invalid selection!", ephemeral=True)
             return
 
-        ratio = f"{parts[1]}_{parts[2]}"  # Extracting ratio (e.g., 16:9, 9:16)
+        ratio = f"{parts[1]}_{parts[2]}"
         video_type = "video_text" if "video_text" in custom_id else "video_image"
 
+        await interaction.response.defer(ephemeral=True)  # Ensure deferring before responding
+
         prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
-        await interaction.followup.send(prompt_request, ephemeral=True)  # Send prompt only once
+        await interaction.followup.send(prompt_request, ephemeral=True)
 
         def check(msg):
             return msg.author == user and msg.channel == interaction.channel
@@ -339,10 +343,12 @@ async def on_interaction(interaction: discord.Interaction):
         required_credits = 2 if video_type == "video_image" else 1
         deduct_credits(user.id, required_credits)
 
+        print(f"Generating video with prompt: {prompt}, ratio: {ratio}, image_url: {image_url}")  # Debugging
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
-        await asyncio.sleep(5)  # Simulating processing delay
+        await asyncio.sleep(5)
 
         video_url = generate_video(prompt, ratio, image_url)
+        print(f"Generated video URL: {video_url}")  # Debugging
 
         if not video_url:
             await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
