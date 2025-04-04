@@ -271,8 +271,8 @@ async def on_interaction(interaction: discord.Interaction):
 
             try:
                 await msg.delete()
-            except discord.NotFound:
-                print("Message already deleted or not found.")
+            except (discord.NotFound, discord.Forbidden) as e:
+                print(f"Failed to delete message: {e}")
 
             if quantity < MIN_CREDITS:
                 await interaction.followup.send("❌ Minimum is 5 credits.", ephemeral=True)
@@ -314,7 +314,7 @@ async def on_interaction(interaction: discord.Interaction):
         ratio = f"{parts[1]}_{parts[2]}"
         video_type = "video_text" if "video_text" in custom_id else "video_image"
 
-        await interaction.response.defer(ephemeral=True)  # Ensure deferring before responding
+        await interaction.response.defer(ephemeral=True)
 
         prompt_request = "📝 Please enter your text prompt:" if video_type == "video_text" else "🖼️ Upload an image and enter a text prompt:"
         await interaction.followup.send(prompt_request, ephemeral=True)
@@ -333,8 +333,8 @@ async def on_interaction(interaction: discord.Interaction):
 
             try:
                 await msg.delete()
-            except discord.NotFound:
-                print("Message already deleted or not found.")
+            except (discord.NotFound, discord.Forbidden) as e:
+                print(f"Failed to delete message: {e}")
 
         except asyncio.TimeoutError:
             await interaction.followup.send("⏳ Timeout! Please try again.", ephemeral=True)
@@ -343,14 +343,15 @@ async def on_interaction(interaction: discord.Interaction):
         required_credits = 2 if video_type == "video_image" else 1
         deduct_credits(user.id, required_credits)
 
-        print(f"Generating video with prompt: {prompt}, ratio: {ratio}, image_url: {image_url}")  # Debugging
+        print(f"Attempting to generate video with: Prompt: {prompt}, Ratio: {ratio}, Image URL: {image_url}")
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
 
         video_url = generate_video(prompt, ratio, image_url)
-        print(f"Generated video URL: {video_url}")  # Debugging
+        print(f"Generated video URL: {video_url}")
 
         if not video_url:
+            print("Video generation failed: generate_video() returned None")
             await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
             return
 
