@@ -160,22 +160,15 @@ async def poll_video_status(job_id, timeout=300, interval=10):
 
     while time.time() - start_time < timeout:
         response = requests.get(status_url, headers=headers)
-
         if response.status_code == 200:
             data = response.json()
-            status = data.get("status")
-            print(f"[polling] Status for job {job_id}: {status}")  # Helpful log
-
-            if status == "succeeded":
+            print(f"Polling status: {data.get('status')}")  # ← Debug info
+            if data.get("status") == "succeeded":
                 return data.get("video_url")
-            elif status == "failed":
+            elif data.get("status") == "failed":
                 return None
-        else:
-            print(f"[polling] Non-200 response: {response.status_code}")
-
         await asyncio.sleep(interval)
-    
-    print(f"[polling] Timeout reached for job {job_id}")
+
     return None  # Timed out
 
 def init_db():
@@ -391,8 +384,7 @@ async def on_interaction(interaction: discord.Interaction):
 
 # Optional: update the user immediately after job ID is acquired
         await interaction.followup.send("⏳ Video generation started. Waiting for completion...", ephemeral=True)
-
-# Poll for video completion
+        
         video_url = await poll_video_status(job_id)
 
         if not video_url:
