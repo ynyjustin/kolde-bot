@@ -122,6 +122,9 @@ def generate_video(prompt, aspect_ratio, image_url=None):
         payload["image_url"] = image_url
 
     try:
+        # ✅ Add this to show what you're sending
+        print(f"🟢 Sending request with payload: {payload}")
+
         response = requests.post(
             "https://api.aivideoapi.com/runway/generate/text",
             json=payload,
@@ -129,9 +132,16 @@ def generate_video(prompt, aspect_ratio, image_url=None):
             timeout=30
         )
 
+        # ✅ Add this to show the raw API response
+        print(f"🔁 Video generation response: {response.status_code} - {response.text}")
+
         if response.status_code == 200:
             data = response.json()
-            return data.get("id")  # <-- Return job ID, not video URL
+
+            # ✅ Add this to show the job ID returned
+            print(f"✅ Job ID received: {data.get('id')}")
+
+            return data.get("id")
         else:
             print(f"❌ API Error: {response.status_code} - {response.text}")
             return None
@@ -365,6 +375,7 @@ async def on_interaction(interaction: discord.Interaction):
         await asyncio.sleep(5)
 
         job_id = generate_video(prompt, ratio, image_url)
+        print(f"🔁 generate_video() returned job_id: {job_id}")
         if not job_id:
             await interaction.followup.send("❌ Failed to start video generation. Please try again later.", ephemeral=True)
             return
