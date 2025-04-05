@@ -389,7 +389,7 @@ async def on_interaction(interaction: discord.Interaction):
         video_url = await poll_video_status(job_id, timeout=600, interval=10)
 
         if not video_url:
-            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
+            # yes
             return
 
         print(f"Generated video URL: {video_url}")
