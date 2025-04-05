@@ -4,6 +4,7 @@ from discord.ext import commands
 import asyncio
 import stripe
 import requests
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -94,51 +95,70 @@ def fetch_video_history(user_id):
     return [entry["video_url"] for entry in response.data]
 
 def generate_video(prompt, aspect_ratio, image_url=None):
+    headers = {
+        "Authorization": f"Bearer {RUNWAY_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "text_prompt": prompt,
+        "model": "gen3",
+        "motion": 5,
+        "seed": 0,
+        "time": 5
+    }
+
+    if aspect_ratio == "16_9":
+        payload["width"] = 1344
+        payload["height"] = 768
+    elif aspect_ratio == "9_16":
+        payload["width"] = 768
+        payload["height"] = 1344
+    elif aspect_ratio == "1_1":
+        payload["width"] = 768
+        payload["height"] = 768
+
+    if image_url:
+        payload["image_url"] = image_url
+
     try:
-        headers = {
-            "Authorization": f"Bearer {RUNWAY_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        # Default payload for Runway
-        payload = {
-            "text_prompt": prompt,
-            "model": "gen3",
-            "motion": 5,
-            "seed": 0,
-            "time": 5
-        }
-
-        if aspect_ratio == "16_9":
-            payload["width"] = 1344
-            payload["height"] = 768
-        elif aspect_ratio == "9_16":
-            payload["width"] = 768
-            payload["height"] = 1344
-        elif aspect_ratio == "1_1":
-            payload["width"] = 768
-            payload["height"] = 768
-
-        if image_url:
-            payload["image_url"] = image_url
-
         response = requests.post(
             "https://api.aivideoapi.com/runway/generate/text",
             json=payload,
             headers=headers,
-            timeout=60
+            timeout=30
         )
 
         if response.status_code == 200:
             data = response.json()
-            return data.get("video_url")
+            return data.get("id")  # <-- Return job ID, not video URL
         else:
             print(f"❌ API Error: {response.status_code} - {response.text}")
             return None
-
     except requests.exceptions.RequestException as e:
         print(f"⚠️ Exception during video generation: {e}")
         return None
+
+def poll_video_status(job_id, timeout=300, interval=10):
+    headers = {
+        "Authorization": f"Bearer {RUNWAY_API_KEY}",
+        "Accept": "application/json"
+    }
+
+    status_url = f"https://api.aivideoapi.com/status/{job_id}"
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        response = requests.get(status_url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") == "succeeded":
+                return data.get("video_url")
+            elif data.get("status") == "failed":
+                return None
+        time.sleep(interval)
+    
+    return None  # Timed out
 
 def init_db():
     try:
@@ -344,7 +364,18 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
 
-        video_url = generate_video(prompt, ratio, image_url)
+        job_id = generate_video(prompt, ratio, image_url)
+        if not job_id:
+            await interaction.followup.send("❌ Failed to start video generation. Please try again later.", ephemeral=True)
+            return
+
+        await interaction.followup.send("⏳ Generating your video... This may take a minute.", ephemeral=True)
+
+# Poll for video completion
+        video_url = poll_video_status(job_id)
+        if not video_url:
+            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
+            return
         print(f"Generated video URL: {video_url}")
 
         if not video_url:
