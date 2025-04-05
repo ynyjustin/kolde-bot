@@ -149,7 +149,7 @@ def generate_video(prompt, aspect_ratio, image_url=None):
         print(f"⚠️ Exception during video generation: {e}")
         return None
 
-def poll_video_status(job_id, timeout=300, interval=10):
+async def poll_video_status(job_id, timeout=300, interval=10):
     headers = {
         "Authorization": f"Bearer {RUNWAY_API_KEY}",
         "Accept": "application/json"
@@ -166,7 +166,7 @@ def poll_video_status(job_id, timeout=300, interval=10):
                 return data.get("video_url")
             elif data.get("status") == "failed":
                 return None
-        time.sleep(interval)
+        await asyncio.sleep(interval)
     
     return None  # Timed out
 
@@ -383,7 +383,7 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.followup.send("⏳ Generating your video... This may take a minute.", ephemeral=True)
 
 # Poll for video completion
-        video_url = poll_video_status(job_id)
+        video_url = await poll_video_status(job_id)
         if not video_url:
             await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
             return
