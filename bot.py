@@ -93,59 +93,51 @@ def fetch_video_history(user_id):
     response = supabase.table("video_history").select("video_url").eq("user_id", user_id).order("generated_at", desc=True).limit(10).execute()
     return [entry["video_url"] for entry in response.data]
 
-def generate_video(prompt, ratio, image_url=None):
+def generate_video(prompt, aspect_ratio, image_url=None):
     try:
-        response = requests.post(
-            "API_URL",
-            json={"prompt": prompt, "ratio": ratio, "image_url": image_url},
-            timeout=30  # Avoid infinite waiting
-        )
-        response.raise_for_status()  # Raise exception for HTTP errors
+        headers = {
+            "Authorization": f"Bearer {RUNWAY_API_KEY}",
+            "Content-Type": "application/json"
+        }
 
-        data = response.json()
-        return data.get("video_url")  # Ensure this key exists
+        # Default payload for Runway
+        payload = {
+            "text_prompt": prompt,
+            "model": "gen3",
+            "motion": 5,
+            "seed": 0,
+            "time": 5
+        }
+
+        if aspect_ratio == "16_9":
+            payload["width"] = 1344
+            payload["height"] = 768
+        elif aspect_ratio == "9_16":
+            payload["width"] = 768
+            payload["height"] = 1344
+        elif aspect_ratio == "1_1":
+            payload["width"] = 768
+            payload["height"] = 768
+
+        if image_url:
+            payload["image_url"] = image_url
+
+        response = requests.post(
+            "https://api.aivideoapi.com/runway/generate/text",
+            json=payload,
+            headers=headers,
+            timeout=60
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("video_url")
+        else:
+            print(f"❌ API Error: {response.status_code} - {response.text}")
+            return None
 
     except requests.exceptions.RequestException as e:
-        print(f"⚠️ API Error: {e}")
-        return None
-    
-    # Default parameters based on the API documentation
-    payload = {
-        "text_prompt": prompt,  # The required text prompt
-        "model": "gen3",  # Default to 'gen3' model (can be changed)
-        "width": 1344,  # Default video width
-        "height": 768,  # Default video height
-        "motion": 5,  # Default motion intensity (won't be used by Gen3 Alpha)
-        "seed": 0,  # Random seed (0 means random)
-        "callback_url": None,  # You can provide a callback URL if needed
-        "time": 5  # Default video time
-    }
-    
-    # If you want to use a custom image, include it in the payload (optional)
-    if image_url:
-        payload["image_url"] = image_url
-
-    # Ensure the aspect_ratio is passed properly, adjusting width/height accordingly
-    if aspect_ratio == "16:9":
-        payload["width"] = 1344
-        payload["height"] = 768
-    elif aspect_ratio == "9:16":
-        payload["width"] = 768
-        payload["height"] = 1344
-    elif aspect_ratio == "1:1":
-        payload["width"] = 768
-        payload["height"] = 768
-
-    # Send POST request to the API
-    url = "https://api.aivideoapi.com/runway/generate/text"
-    response = requests.post(url, json=payload, headers=headers)
-
-    if response.status_code == 200:
-        data = response.json()
-        video_url = data.get("video_url")  # Assuming the response contains the video URL
-        return video_url
-    else:
-        print(f"❌ Error: {response.status_code} - {response.text}")
+        print(f"⚠️ Exception during video generation: {e}")
         return None
 
 def init_db():
