@@ -376,11 +376,19 @@ async def on_interaction(interaction: discord.Interaction):
 
         job_id = generate_video(prompt, ratio, image_url)
         print(f"🔁 generate_video() returned job_id: {job_id}")
+
         if not job_id:
             await interaction.followup.send("❌ Failed to start video generation. Please try again later.", ephemeral=True)
             return
 
-        await interaction.followup.send("⏳ Generating your video... This may take a minute.", ephemeral=True)
+# Optional: update the user immediately after job ID is acquired
+        await interaction.followup.send("⏳ Video generation started. Waiting for completion...", ephemeral=True)
+
+        video_url = await poll_video_status(job_id)
+
+        if not video_url:
+            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
+            return
 
 # Poll for video completion
         video_url = await poll_video_status(job_id)
