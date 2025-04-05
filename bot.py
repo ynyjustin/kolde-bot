@@ -380,7 +380,7 @@ async def on_interaction(interaction: discord.Interaction):
         print(f"🔁 generate_video() returned job_id: {job_id}")
 
         if not job_id:
-            await interaction.followup.send("❌ Failed to start video generation. Please try again later.", ephemeral=True)
+             # yes
             return
 
 # Optional: update the user immediately after job ID is acquired
