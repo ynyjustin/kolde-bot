@@ -77,7 +77,7 @@ def add_credits(user_id, amount):
     if current:
         supabase.table("user_credits").update({"credits": current + amount}).eq("user_id", user_id).execute()
     else:
-        supabase.table("user_credits").insert({"user_id": user_id, "credits": amount}).execute()
+        supabase.table("user_credits").upsert({"user_id": user_id, "credits": amount}).execute()
 
 def deduct_credits(user_id, amount):
     current = get_credits(user_id)
