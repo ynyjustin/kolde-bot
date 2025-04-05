@@ -397,20 +397,25 @@ async def on_interaction(interaction: discord.Interaction):
 
         try:
             await user.send(f"🎥 Your video is ready! Click here: {video_url}")
+            print(f"✅ DM sent to {user.name} ({user.id})")
             await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
         except discord.Forbidden:
+            print(f"❌ Cannot DM {user.name} ({user.id}) — likely has DMs disabled.")
+            await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
+        except Exception as e:
+            print(f"❌ Failed to send DM to {user.name}: {e}")
             await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
 
 # This block should NOT be indented inside the video logic
-        if custom_id == "history":
-            if not has_access:
-                await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
-                return
+    if custom_id == "history":
+        if not has_access:
+            await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
+            return
 
-            history = fetch_video_history(user.id)
-            history_text = "\n".join([f"📹 {video}" for video in history]) if history else "📜 No history found!"
-            embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
-            await interaction.followup.send(embed=embed, ephemeral=True)
+        history = fetch_video_history(user.id)
+        history_text = "\n".join([f"📹 {video}" for video in history]) if history else "📜 No history found!"
+        embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
+        await interaction.followup.send(embed=embed, ephemeral=True)
             
 async def setup_menu(channel):
     embed = discord.Embed(
