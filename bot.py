@@ -4,6 +4,7 @@ from discord.ext import commands
 import asyncio
 import stripe
 import requests
+import aiohttp
 import time
 from datetime import datetime
 from dotenv import load_dotenv
@@ -158,18 +159,24 @@ async def poll_video_status(job_id, timeout=300, interval=10):
     status_url = f"https://api.aivideoapi.com/status/{job_id}"
     start_time = time.time()
 
-    while time.time() - start_time < timeout:
-        response = requests.get(status_url, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            print(f"Polling status: {data.get('status')}")  # ← Debug info
-            if data.get("status") == "succeeded":
-                print(f"🎬 Video URL found: {data.get('video_url')}")
-                return data.get("video_url")
-            elif data.get("status") == "failed":
-                return None
-        await asyncio.sleep(interval)
+    async with aiohttp.ClientSession() as session:
+        while time.time() - start_time < timeout:
+            async with session.get(status_url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    print(f"Polling status: {data.get('status')}")  # Debug
 
+                    if data.get("status") == "succeeded":
+                        print(f"🎬 Video URL found: {data.get('video_url')}")
+                        return data.get("video_url")
+
+                    elif data.get("status") == "failed":
+                        print("❌ Video generation failed.")
+                        return None
+
+            await asyncio.sleep(interval)
+
+    print("⌛ Timed out waiting for video.")
     return None  # Timed out
 
 def init_db():
