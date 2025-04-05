@@ -164,6 +164,7 @@ async def poll_video_status(job_id, timeout=300, interval=10):
             data = response.json()
             print(f"Polling status: {data.get('status')}")  # ← Debug info
             if data.get("status") == "succeeded":
+                print(f"🎬 Video URL found: {data.get('video_url')}")
                 return data.get("video_url")
             elif data.get("status") == "failed":
                 return None
@@ -385,7 +386,7 @@ async def on_interaction(interaction: discord.Interaction):
 # Optional: update the user immediately after job ID is acquired
         await interaction.followup.send("⏳ Video generation started. Waiting for completion...", ephemeral=True)
         
-        video_url = await poll_video_status(job_id)
+        video_url = await poll_video_status(job_id, timeout=600, interval=10)
 
         if not video_url:
             await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
