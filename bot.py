@@ -135,7 +135,7 @@ def generate_video(prompt, aspect_ratio, image_url=None):
         # ✅ Add this to show the raw API response
         print(f"🔁 Video generation response: {response.status_code} - {response.text}")
 
-        if response.status_code == 200:
+        if response.status_code in [200, 202]:
             data = response.json()
 
             # ✅ Add this to show the job ID returned
@@ -376,7 +376,7 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
 
-        job_id = generate_video(prompt, ratio, image_url)
+        job_id = await asyncio.to_thread(generate_video, prompt, ratio, image_url)
         print(f"🔁 generate_video() returned job_id: {job_id}")
 
         if not job_id:
