@@ -160,14 +160,22 @@ async def poll_video_status(job_id, timeout=300, interval=10):
 
     while time.time() - start_time < timeout:
         response = requests.get(status_url, headers=headers)
+
         if response.status_code == 200:
             data = response.json()
-            if data.get("status") == "succeeded":
+            status = data.get("status")
+            print(f"[polling] Status for job {job_id}: {status}")  # Helpful log
+
+            if status == "succeeded":
                 return data.get("video_url")
-            elif data.get("status") == "failed":
+            elif status == "failed":
                 return None
+        else:
+            print(f"[polling] Non-200 response: {response.status_code}")
+
         await asyncio.sleep(interval)
     
+    print(f"[polling] Timeout reached for job {job_id}")
     return None  # Timed out
 
 def init_db():
@@ -384,23 +392,14 @@ async def on_interaction(interaction: discord.Interaction):
 # Optional: update the user immediately after job ID is acquired
         await interaction.followup.send("⏳ Video generation started. Waiting for completion...", ephemeral=True)
 
-        video_url = await poll_video_status(job_id)
-
-        if not video_url:
-            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
-            return
-
 # Poll for video completion
         video_url = await poll_video_status(job_id)
+
         if not video_url:
             await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
             return
+
         print(f"Generated video URL: {video_url}")
-
-        if not video_url:
-            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
-            return
-
         save_video(user.id, video_url)
 
         try:
@@ -409,15 +408,16 @@ async def on_interaction(interaction: discord.Interaction):
         except discord.Forbidden:
             await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
 
-    if custom_id == "history":
-        if not has_access:
-            await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
-            return
+# This block should NOT be indented inside the video logic
+        if custom_id == "history":
+            if not has_access:
+                await interaction.response.send_message("🔒 You need access!", view=PaymentMenu(), ephemeral=True)
+                return
 
-        history = fetch_video_history(user.id)
-        history_text = "\n".join([f"📹 {video}" for video in history]) if history else "📜 No history found!"
-        embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
-        await interaction.followup.send(embed=embed, ephemeral=True)
+            history = fetch_video_history(user.id)
+            history_text = "\n".join([f"📹 {video}" for video in history]) if history else "📜 No history found!"
+            embed = discord.Embed(title="📜 Your Video History", description=history_text, color=discord.Color.blue())
+            await interaction.followup.send(embed=embed, ephemeral=True)
             
 async def setup_menu(channel):
     embed = discord.Embed(
