@@ -242,6 +242,9 @@ import asyncio
 
 @bot.event
 async def on_interaction(interaction: discord.Interaction):
+    job_id = None
+    prompt = None
+    image_url = None
     user = interaction.user
     guild = interaction.guild
     member = guild.get_member(user.id) if guild else None
@@ -414,8 +417,9 @@ async def on_interaction(interaction: discord.Interaction):
 
         else:
             print("❌ Video generation failed or timed out.")
-            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
-
+            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True) 
+            return 
+    
 # This block should NOT be indented inside the video logic
     if custom_id == "history":
         if not has_access:
