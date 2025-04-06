@@ -150,7 +150,7 @@ def generate_video(prompt, aspect_ratio, image_url=None):
         print(f"⚠️ Exception during video generation: {e}")
         return None
 
-async def poll_video_status(job_id, timeout=300, interval=10):
+async def poll_video_status(job_id, timeout=600, interval=10):
     headers = {
         "Authorization": f"Bearer {RUNWAY_API_KEY}",
         "Accept": "application/json"
@@ -159,25 +159,19 @@ async def poll_video_status(job_id, timeout=300, interval=10):
     status_url = f"https://api.aivideoapi.com/status/{job_id}"
     start_time = time.time()
 
-    async with aiohttp.ClientSession() as session:
-        while time.time() - start_time < timeout:
+    while time.time() - start_time < timeout:
+        async with aiohttp.ClientSession() as session:
             async with session.get(status_url, headers=headers) as response:
                 if response.status == 200:
                     data = await response.json()
-                    print(f"Polling status: {data.get('status')}")  # Debug
-
+                    print(f"📡 Polling status: {data.get('status')}")
                     if data.get("status") == "succeeded":
-                        print(f"🎬 Video URL found: {data.get('video_url')}")
                         return data.get("video_url")
-
                     elif data.get("status") == "failed":
-                        print("❌ Video generation failed.")
                         return None
+        await asyncio.sleep(interval)
 
-            await asyncio.sleep(interval)
-
-    print("⌛ Timed out waiting for video.")
-    return None  # Timed out
+    return None  # Timeout
 
 def init_db():
     try:
@@ -393,25 +387,33 @@ async def on_interaction(interaction: discord.Interaction):
 # Optional: update the user immediately after job ID is acquired
         await interaction.followup.send("⏳ Video generation started. Waiting for completion...", ephemeral=True)
         
-        video_url = await poll_video_status(job_id, timeout=600, interval=10)
+        video_url = await poll_video_status(job_id, timeout=600)
 
-        if not video_url:
-            # yes
-            return
+        if video_url:
+            print(f"✅ Video generation succeeded. URL: {video_url}")
 
-        print(f"Generated video URL: {video_url}")
-        save_video(user.id, video_url)
+    # Save to Supabase
+            try:
+                save_video(user.id, video_url)
+                print(f"📁 Saved video to history for user {user.id}")
+            except Exception as e:
+                print(f"❌ Failed to save video to history: {e}")
 
-        try:
-            await user.send(f"🎥 Your video is ready! Click here: {video_url}")
-            print(f"✅ DM sent to {user.name} ({user.id})")
-            await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
-        except discord.Forbidden:
-            print(f"❌ Cannot DM {user.name} ({user.id}) — likely has DMs disabled.")
-            await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
-        except Exception as e:
-            print(f"❌ Failed to send DM to {user.name}: {e}")
-            await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
+    # Try sending DM
+            try:
+                await user.send(f"🎥 Your video is ready! Click here: {video_url}")
+                print(f"📬 Sent DM to {user.name} ({user.id})")
+                await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
+            except discord.Forbidden:
+                print(f"⚠️ Cannot DM {user.name} — DMs disabled.")
+                await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
+            except Exception as e:
+                print(f"❌ Failed to send DM: {e}")
+                await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
+
+        else:
+            print("❌ Video generation failed or timed out.")
+            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
 
 # This block should NOT be indented inside the video logic
     if custom_id == "history":
