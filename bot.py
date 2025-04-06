@@ -386,34 +386,35 @@ async def on_interaction(interaction: discord.Interaction):
 
 # Optional: update the user immediately after job ID is acquired
         await interaction.followup.send("⏳ Video generation started. Waiting for completion...", ephemeral=True)
-        
+    if job_id:
         video_url = await poll_video_status(job_id, timeout=600)
 
-    if video_url:
-        print(f"✅ Video generation succeeded. URL: {video_url}")
-
-    # Save to Supabase
-        try:
-            save_video(user.id, video_url)
-            print(f"📁 Saved video to history for user {user.id}")
-        except Exception as e:
-            print(f"❌ Failed to save video to history: {e}")
+        if video_url:
+            await interaction.user.send(f"Here's your video for prompt: `{prompt}`", file=discord.File(video_path))
+            
+    # Save to history
+            await supabase.table("video_history").insert({
+                "user_id": user_id,
+                "prompt": prompt,
+                "video_url": video_url,
+                "timestamp": datetime.utcnow().isoformat()
+            }).execute()
 
     # Try sending DM
-        try:
-            await user.send(f"🎥 Your video is ready! Click here: {video_url}")
-            print(f"📬 Sent DM to {user.name} ({user.id})")
-            await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
-        except discord.Forbidden:
-            print(f"⚠️ Cannot DM {user.name} — DMs disabled.")
-            await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
-        except Exception as e:
-            print(f"❌ Failed to send DM: {e}")
-            await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
+            try:
+                await user.send(f"🎥 Your video is ready! Click here: {video_url}")
+                print(f"📬 Sent DM to {user.name} ({user.id})")
+                await interaction.followup.send("✅ Video sent to your DMs!", ephemeral=True)
+            except discord.Forbidden:
+                print(f"⚠️ Cannot DM {user.name} — DMs disabled.")
+                await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
+            except Exception as e:
+                print(f"❌ Failed to send DM: {e}")
+                await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
 
-    else:
-        print("❌ Video generation failed or timed out.")
-        await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
+        else:
+            print("❌ Video generation failed or timed out.")
+            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
 
 # This block should NOT be indented inside the video logic
     if custom_id == "history":
