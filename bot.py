@@ -393,7 +393,14 @@ async def on_interaction(interaction: discord.Interaction):
         video_url = await poll_video_status(job_id, timeout=600)
 
         if video_url:
-            await interaction.user.send(f"Here's your video for prompt: `{prompt}`", file=discord.File(video_path))
+            async with aiohttp.ClientSession() as session:
+                async with session.get(video_url) as resp:
+                    if resp.status == 200:
+                        video_bytes = await resp.read()
+                        file = discord.File(io.BytesIO(video_bytes), filename="video.mp4")
+                        await interaction.user.send(f"Here's your video for prompt: `{prompt}`", file=file)
+                    else:
+                        await interaction.user.send(f"⚠️ Video was generated but failed to fetch the file. You can try opening this link: {video_url}")
             
     # Save to history
             await supabase.table("video_history").insert({
