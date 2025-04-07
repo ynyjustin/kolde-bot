@@ -296,7 +296,7 @@ async def on_interaction(interaction: discord.Interaction):
 
     if custom_id == "buy_credits":
         await interaction.response.send_message("💰 Enter how many credits you want to buy (min 5):", ephemeral=True)
-        
+
         def check(m):
             return m.author.id == user.id and m.channel == interaction.channel
 
@@ -394,7 +394,7 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("❌ Failed to start video generation. Please try again.", ephemeral=True)
             return
 
-# 🛠️ Wait a few seconds before polling to ensure job is registered
+        # 🛠️ Wait a few seconds before polling to ensure job is registered
         await asyncio.sleep(10)
 
         await interaction.followup.send("⏳ Video generation started. Waiting for completion...", ephemeral=True)
