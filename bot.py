@@ -95,7 +95,7 @@ def fetch_video_history(user_id):
     response = supabase.table("video_history").select("video_url").eq("user_id", user_id).order("generated_at", desc=True).limit(10).execute()
     return [entry["video_url"] for entry in response.data]
 
-def generate_video(prompt, aspect_ratio, image_url=None):
+async def generate_video(prompt, aspect_ratio, image_url=None):
     headers = {
         "Authorization": f"Bearer {RUNWAY_API_KEY}",
         "Content-Type": "application/json"
@@ -122,33 +122,31 @@ def generate_video(prompt, aspect_ratio, image_url=None):
     if image_url:
         payload["image_url"] = image_url
 
-    try:
-        # ✅ Add this to show what you're sending
-        print(f"🟢 Sending request with payload: {payload}")
+    print(f"🟢 Sending async request with payload: {payload}")
 
-        response = requests.post(
-            "https://api.aivideoapi.com/runway/generate/text",
-            json=payload,
-            headers=headers,
-            timeout=30
-        )
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(
+                "https://api.aivideoapi.com/runway/generate/text",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
 
-        # ✅ Add this to show the raw API response
-        print(f"🔁 Video generation response: {response.status_code} - {response.text}")
+                print(f"🔁 API response: {response.status}")
+                data = await response.json()
+                print(f"📦 API JSON: {data}")
 
-        if response.status_code in [200, 202]:
-            data = response.json()
-
-            # ✅ Add this to show the job ID returned
-            print(f"✅ Job ID received: {data.get('id')}")
-
-            return data.get("id")
-        else:
-            print(f"❌ API Error: {response.status_code} - {response.text}")
+                if response.status in [200, 202]:
+                    job_id = data.get("id")
+                    print(f"✅ Job ID received: {job_id}")
+                    return job_id
+                else:
+                    print(f"❌ API Error: {data}")
+                    return None
+        except Exception as e:
+            print(f"⚠️ Exception during video generation: {e}")
             return None
-    except requests.exceptions.RequestException as e:
-        print(f"⚠️ Exception during video generation: {e}")
-        return None
 
 async def poll_video_status(job_id, timeout=600, interval=10):
     headers = {
@@ -380,7 +378,7 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.followup.send("⏳ Generating your video...", ephemeral=True)
         await asyncio.sleep(5)
 
-        job_id = await asyncio.to_thread(generate_video, prompt, ratio, image_url)
+        job_id = await generate_video(prompt, ratio, image_url)
         print(f"🔁 generate_video() returned job_id: {job_id}")
 
         if not job_id:
@@ -408,8 +406,9 @@ async def on_interaction(interaction: discord.Interaction):
                 "user_id": str(user.id),
                 "prompt": prompt,
                 "video_url": video_url,
-                "timestamp": datetime.utcnow().isoformat()
+                "generated_at": datetime.utcnow().isoformat() 
             }).execute()
+
         else:
             print("❌ Video generation failed or timed out.")
             await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
