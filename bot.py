@@ -148,28 +148,37 @@ async def generate_video(prompt, aspect_ratio, image_url=None):
             print(f"⚠️ Exception during video generation: {e}")
             return None
 
-async def poll_video_status(job_id, timeout=600, interval=10):
+async def poll_video_status(job_id, timeout=600, interval=5):
+    url = f"https://api.aivideoapi.com/runway/jobs/{job_id}"
     headers = {
         "Authorization": f"Bearer {RUNWAY_API_KEY}",
-        "Accept": "application/json"
+        "Content-Type": "application/json"
     }
 
-    status_url = f"https://api.aivideoapi.com/status/{job_id}"
-    start_time = time.time()
+    start_time = asyncio.get_event_loop().time()
 
-    while time.time() - start_time < timeout:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(status_url, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    print(f"📡 Polling status: {data.get('status')}")
-                    if data.get("status") == "succeeded":
-                        return data.get("video_url")
-                    elif data.get("status") == "failed":
-                        return None
-        await asyncio.sleep(interval)
+    async with aiohttp.ClientSession() as session:
+        while True:
+            async with session.get(url, headers=headers) as response:
+                if response.status != 200:
+                    print(f"⚠️ Error checking job status: {response.status}")
+                    return None
 
-    return None  # Timeout
+                data = await response.json()
+                print(f"🔁 Polling job {job_id} status: {data.get('status')}")
+
+                if data.get("status") == "succeeded":
+                    return data.get("output", {}).get("video_url")  # ✅ might be nested
+                elif data.get("status") in ["failed", "cancelled"]:
+                    print("❌ Job failed or was cancelled.")
+                    return None
+
+            # Check timeout
+            if asyncio.get_event_loop().time() - start_time > timeout:
+                print("⏱️ Timeout reached while waiting for video.")
+                return None
+
+            await asyncio.sleep(interval)
 
 def init_db():
     try:
