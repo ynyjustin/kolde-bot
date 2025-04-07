@@ -384,33 +384,14 @@ async def on_interaction(interaction: discord.Interaction):
         print(f"🔁 generate_video() returned job_id: {job_id}")
 
         if not job_id:
-             # yes
+            await interaction.followup.send("❌ Failed to start video generation. Please try again.", ephemeral=True)
             return
 
-# Optional: update the user immediately after job ID is acquired
         await interaction.followup.send("⏳ Video generation started. Waiting for completion...", ephemeral=True)
-    if job_id:
+
         video_url = await poll_video_status(job_id, timeout=600)
 
         if video_url:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(video_url) as resp:
-                    if resp.status == 200:
-                        video_bytes = await resp.read()
-                        file = discord.File(io.BytesIO(video_bytes), filename="video.mp4")
-                        await interaction.user.send(f"Here's your video for prompt: `{prompt}`", file=file)
-                    else:
-                        await interaction.user.send(f"⚠️ Video was generated but failed to fetch the file. You can try opening this link: {video_url}")
-            
-    # Save to history
-            await supabase.table("video_history").insert({
-                "user_id": user_id,
-                "prompt": prompt,
-                "video_url": video_url,
-                "timestamp": datetime.utcnow().isoformat()
-            }).execute()
-
-    # Try sending DM
             try:
                 await user.send(f"🎥 Your video is ready! Click here: {video_url}")
                 print(f"📬 Sent DM to {user.name} ({user.id})")
@@ -422,10 +403,16 @@ async def on_interaction(interaction: discord.Interaction):
                 print(f"❌ Failed to send DM: {e}")
                 await interaction.followup.send(f"🎥 Your video is ready! Click here: {video_url}", ephemeral=True)
 
+    # Save to history
+            supabase.table("video_history").insert({
+                "user_id": str(user.id),
+                "prompt": prompt,
+                "video_url": video_url,
+                "timestamp": datetime.utcnow().isoformat()
+            }).execute()
         else:
             print("❌ Video generation failed or timed out.")
-            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True) 
-            return 
+            await interaction.followup.send("❌ Failed to generate video. Please try again later.", ephemeral=True)
     
 # This block should NOT be indented inside the video logic
     if custom_id == "history":
