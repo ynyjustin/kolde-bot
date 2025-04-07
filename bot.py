@@ -148,7 +148,7 @@ async def generate_video(prompt, aspect_ratio, image_url=None):
             print(f"⚠️ Exception during video generation: {e}")
             return None
 
-async def poll_video_status(job_id, timeout=600, interval=5):
+async def poll_video_status(job_id, timeout=600, interval=10):
     url = f"https://api.aivideoapi.com/runway/jobs/{job_id}"
     headers = {
         "Authorization": f"Bearer {RUNWAY_API_KEY}",
@@ -168,9 +168,10 @@ async def poll_video_status(job_id, timeout=600, interval=5):
                 print(f"🔁 Polling job {job_id} status: {data.get('status')}")
 
                 if data.get("status") == "succeeded":
-                    return data.get("output", {}).get("video_url")  # ✅ might be nested
+                    print(f"✅ Job {job_id} completed successfully!")
+                    return data.get("output", {}).get("video_url")
                 elif data.get("status") in ["failed", "cancelled"]:
-                    print("❌ Job failed or was cancelled.")
+                    print(f"❌ Job {job_id} failed or was cancelled.")
                     return None
 
             # Check timeout
