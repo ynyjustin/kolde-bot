@@ -385,6 +385,9 @@ async def on_interaction(interaction: discord.Interaction):
             await interaction.followup.send("❌ Failed to start video generation. Please try again.", ephemeral=True)
             return
 
+# 🛠️ Wait a few seconds before polling to ensure job is registered
+        await asyncio.sleep(10)
+
         await interaction.followup.send("⏳ Video generation started. Waiting for completion...", ephemeral=True)
 
         video_url = await poll_video_status(job_id, timeout=600)
