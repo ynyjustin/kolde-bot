@@ -124,47 +124,62 @@ async def generate_video(prompt, aspect_ratio, image_url=None):
 
     print(f"🟢 Sending async request with payload: {payload}")
 
-async def poll_video_status(video_id):
-    import aiohttp
-    import asyncio
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(
+                "https://api.aivideoapi.com/runway/generate/text",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
 
+                print(f"🔁 API response: {response.status}")
+                data = await response.json()
+                print(f"📦 API JSON: {data}")
+
+                if response.status in [200, 202]:
+                    job_id = data.get("id")
+                    print(f"✅ Job ID received: {job_id}")
+                    return job_id
+                else:
+                    print(f"❌ API Error: {data}")
+                    return None
+        except Exception as e:
+            print(f"⚠️ Exception during video generation: {e}")
+            return None
+
+async def poll_video_status(job_id, timeout=600, interval=10):
+    url = f"https://api.aivideoapi.com/runway/jobs/{job_id}"
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {AI_VIDEO_API_KEY}",
+        "Authorization": f"Bearer {RUNWAY_API_KEY}",
+        "Content-Type": "application/json"
     }
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            while True:
-                async with session.get(f"{VIDEO_STATUS_URL}/{video_id}", headers=headers) as resp:
-                    if resp.status != 200:
-                        print(f"[poll_video_status] API returned status code: {resp.status}")
-                        response_text = await resp.text()
-                        print(f"[poll_video_status] Response text: {response_text}")
-                        return None
+    start_time = asyncio.get_event_loop().time()
 
-                    try:
-                        response = await resp.json()
-                    except Exception as json_error:
-                        print(f"[poll_video_status] Failed to parse JSON: {json_error}")
-                        response_text = await resp.text()
-                        print(f"[poll_video_status] Response text: {response_text}")
-                        return None
+    async with aiohttp.ClientSession() as session:
+        while True:
+            async with session.get(url, headers=headers) as response:
+                if response.status != 200:
+                    print(f"⚠️ Error checking job status: {response.status}")
+                    return None
 
-                    status = response.get("status")
-                    print(f"[poll_video_status] Current status: {status}")
+                data = await response.json()
+                print(f"🔁 Polling job {job_id} status: {data.get('status')}")
 
-                    if status == "completed":
-                        print("[poll_video_status] Video generation completed.")
-                        return response
-                    elif status == "failed":
-                        print("[poll_video_status] Video generation failed.")
-                        return None
+                if data.get("status") == "succeeded":
+                    print(f"✅ Job {job_id} completed successfully!")
+                    return data.get("output", {}).get("video_url")
+                elif data.get("status") in ["failed", "cancelled"]:
+                    print(f"❌ Job {job_id} failed or was cancelled.")
+                    return None
 
-                    await asyncio.sleep(5)
-    except Exception as e:
-        print(f"[poll_video_status] Error polling video status: {e}")
-        return None
+            # Check timeout
+            if asyncio.get_event_loop().time() - start_time > timeout:
+                print("⏱️ Timeout reached while waiting for video.")
+                return None
+
+            await asyncio.sleep(interval)
 
 def init_db():
     try:
